@@ -9,7 +9,7 @@ local tetrahedron_copies = {}
 local use_mouse = true
 
 love.window.setMode(640,480,{resizable=true})
-love.window.setTitle('Quinta 3D - The world worst 3d engine!!!')
+love.window.setTitle('Quinta 3D - The World Worst 3D Engine!!!')
 
 
 function love.load()
