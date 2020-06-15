@@ -2,7 +2,7 @@
 
 ## The World Worst 3D Engine!!!
 
-![PicturesA](https://github.com/Calaverd/Quinta3d/tree/master/assets/quinta_3d.png?raw=true)
+![example](/assets/quinta_3d.png)
 
 Quinta 3d is a very bare bones 3d render engine build on top of LOVE2D **more like a demo that something to be used seriously.** 
 
