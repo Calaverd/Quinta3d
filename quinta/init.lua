@@ -327,8 +327,6 @@ function quinta.Space3D()
     self.rot = CPMLF_NEW_VEC3(0,0,0)
     self.scale = CPMLF_NEW_VEC3(1,1,1)
     
-        
-    
     function self.getPosAsVector()
         return self.pos
     end
@@ -367,6 +365,12 @@ function quinta.Space3D()
         self.calculateTransform()
     end
     
+    function  self.setScale(x,y,z)
+        if x then self.scale.x = x end
+        if y then self.scale.y = y end
+        if z then self.scale.z = z end
+        self.calculateTransform()
+    end
     
     return self
 end
