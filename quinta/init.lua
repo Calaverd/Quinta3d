@@ -7,16 +7,53 @@ ffi = require "ffi"
 --anim9 = require "quinta/anim9"
 
 local quinta = {
-	_LICENSE     = "Quinta 3D is distributed under the terms of the MIT license. See LICENSE.md.",
+	_LICENSE     = "Quinta 3D is distributed under the terms of the MIT license. See LICENSE.",
 	_URL         = "https://github.com/excessive/iqm",
 	_VERSION     = "0.0.1",
 	_DESCRIPTION = "A simple 3d engine for LÖVE.",
 }
 
+--We borrow intersection math from cpml
+quinta.intersect = cpml.intersect
+quinta.cpml = cpml
+
 local DEFAULT_SHADER = nil 
 local DEFAULT_DISTORTION = nil
-local DEFAULT_TEXTURE = nil 
---local UPDIR = cpml.vec3(0,0,1)
+local DEFAULT_TEXTURE = nil
+--we create a default cube mesh to show aabb 
+local DEFAULT_CUBE_MODEL = nil
+--any small bost of speed is welcome... 
+--CPMLF = Cirno Perfect Math Library Function
+local CPMLF_IDENTITY_MATRIX = cpml.mat4.identity
+local CPMLF_VEC3_DIST2 = cpml.vec3.dist2
+local CPMLF_TRANSPOSE_MATRIX = cpml.mat4.transpose
+local CPMLF_NEW_MATRIX = cpml.mat4.new
+local CPMLF_INVERT_MATRIX = cpml.mat4.invert
+local CPMLF_VEC2_ANGLE2 = cpml.vec2.angle_to
+local CPMLF_VEC2_DIST = cpml.vec2.dist
+local CPMLF_NEW_VEC2 = cpml.vec2
+local CPMLF_NEW_VEC3 = cpml.vec3
+--
+local CPMLC_UNIT_V3_X = cpml.vec3.unit_x
+local CPMLC_UNIT_V3_Y = cpml.vec3.unit_y
+local CPMLC_UNIT_V3_Z = cpml.vec3.unit_z
+--local UPDIR = CPMLF_NEW_VEC3(0,0,1)
+
+local function table_append(i_table, ...)
+    --create a copy of the table...
+    local o_table = {}
+    for k,v in pairs(i_table) do
+        o_table[k] = v
+    end
+    
+    for _,v in pairs({...}) do
+        o_table[#o_table+1] = v
+    end
+    
+    return o_table
+end
+
+
 
 local function startupRender()
     print(base)
@@ -35,16 +72,18 @@ local function startupRender()
     love.graphics.setCanvas()
     DEFAULT_TEXTURE = love.graphics.newImage(temp_canvas:newImageData())
     temp_canvas = nil
+    
+    DEFAULT_CUBE_MODEL =  quinta.newModel(quinta.pCube(1,1,1))
 end
 
 local function TransposeMatrix(mat)
-	local m = cpml.mat4.new()
-	return cpml.mat4.transpose(m, mat)
+	local m = CPMLF_NEW_MATRIX()
+	return CPMLF_TRANSPOSE_MATRIX(m, mat)
 end
 
 local function InvertMatrix(mat)
-	local m = cpml.mat4.new()
-	return cpml.mat4.invert(m, mat)
+	local m = CPMLF_NEW_MATRIX()
+	return CPMLF_INVERT_MATRIX(m, mat)
 end
 
 
@@ -169,7 +208,7 @@ end
 
 function quinta.newModel(vertex_data,material_data)
     local model = {}
-    local format = {
+    local mesh_format = {
         {"VertexPosition", "float", 3},
         {"VertexTexCoord", "float", 2},
         {"VertexColor", "float", 3},
@@ -199,7 +238,7 @@ function quinta.newModel(vertex_data,material_data)
             i=i+4
         end
     end
-    print('num faces = ', #vertex_data)
+    --print('num faces = ', #vertex_data)
     if #vertex_data > 0 then
         for i=1, #vertex_data do
             --uv coords ? 
@@ -217,8 +256,8 @@ function quinta.newModel(vertex_data,material_data)
 
             -- normals? 
             if #vertex_data[i] < 9 then
-                local normal_vector = cpml.vec3.normalize(
-                    cpml.vec3(
+                local normal_vector = CPMLF_NEW_VEC3.normalize(
+                    CPMLF_NEW_VEC3(
                         vertex_data[i][1],
                         vertex_data[i][2],
                         vertex_data[i][3])
@@ -229,7 +268,7 @@ function quinta.newModel(vertex_data,material_data)
             end 
         end
 
-        model.mesh = love.graphics.newMesh(format, vertex_data, "triangles")
+        model.mesh = love.graphics.newMesh(mesh_format, vertex_data, "triangles")
     end
 
     return model
@@ -280,18 +319,70 @@ function quinta.Material3D(diffuse,normal,distortion, layer)
     return self
 end
 
+--the basic description of location, rotation and scale of a object in 3d Space
+function quinta.Space3D()
+    local self = {}
+    
+    self.pos = CPMLF_NEW_VEC3(0,0,0)
+    self.rot = CPMLF_NEW_VEC3(0,0,0)
+    self.scale = CPMLF_NEW_VEC3(1,1,1)
+    
+        
+    
+    function self.getPosAsVector()
+        return self.pos
+    end
+    
+    function self.getPos()
+        return self.pos.x, self.pos.y, self.pos.z
+    end
+    
+    function self.getRotAsVector()
+        return self.rot
+    end
+    
+    function self.getRot()
+        return self.rot.x, self.rot.y, self.rot.z
+    end
+    
+    function self.getScaleAsVector()
+        return self.scale
+    end
+    
+    function self.getScale()
+        return self.scale.x, self.scale.y, self.scale.z
+    end
+    
+    function self.setPos(x,y,z)
+        if x then self.pos.x = x end
+        if y then self.pos.y = y end
+        if z then self.pos.z = z end
+        self.calculateTransform()
+    end
+
+    function  self.setRot(x,y,z)
+        if x then self.rot.x = x end
+        if y then self.rot.y = y end
+        if z then self.rot.z = z end
+        self.calculateTransform()
+    end
+    
+    
+    return self
+end
+
 
 function quinta.Camera(camera_type, renderWidth, renderHeight)
-    local self = {}
+    local self = quinta.Space3D()
     local fov = 60
     local nearClip = 0.0001
     local farClip = 1000
     local width, height = love.window.getMode( )
     self.renderHeight = renderHeight or height
     self.renderWidth = renderWidth or width
-    self.pos = cpml.vec3(0,0,3)
-    self.rot = cpml.vec3(0,0,0)
-    self.scale = cpml.vec3(1,1,1)
+    self.direction = CPMLF_NEW_VEC3(0,0,-1) --by default, the camera is downward
+    self.camera_dir_transform = nil
+    self.scale = CPMLF_NEW_VEC3(1,1,1)
     self.camera_view = cpml.mat4()
     self.camera_inverse = InvertMatrix(self.camera_view)
             
@@ -305,24 +396,42 @@ function quinta.Camera(camera_type, renderWidth, renderHeight)
         local ratio =  (self.renderWidth/self.renderHeight)
         self.matrix = TransposeMatrix(cpml.mat4.from_ortho(-10,10,5*ratio,-5*ratio,0.0001,10))
     end
+    
+    --we override the calculte transform of space3D
+    function self.calculateTransform()
+        --move the model...
+        local new_transform = nil
+        new_transform = CPMLF_IDENTITY_MATRIX()
+        
+        -- apply rotations
+        new_transform:scale(new_transform, self.scale)
 
-    function self.setPos(x,y,z)
-        if x then self.pos.x = x end
-        if y then self.pos.y = y end
-        if z then self.pos.z = z end
-    end
+        new_transform:rotate(new_transform, self.rot.z , CPMLC_UNIT_V3_Z)
+        new_transform:rotate(new_transform, self.rot.y , CPMLC_UNIT_V3_Y)
+        new_transform:rotate(new_transform, self.rot.x , CPMLC_UNIT_V3_X)
+        
+        new_transform:translate(new_transform, CPMLF_NEW_VEC3(self.pos.x,self.pos.y,self.pos.z))
 
-    function  self.setRot(x,y,z)
-        if x then self.rot.x = x end
-        if y then self.rot.y = y end
-        if z then self.rot.z = z end
+        self.camera_dir_transform = TransposeMatrix(new_transform)
+
+        new_transform = CPMLF_IDENTITY_MATRIX()
+        new_transform:translate(new_transform, CPMLF_NEW_VEC3(0,0,0))
+        -- apply rotations
+        new_transform:rotate(new_transform, -self.rot.x , CPMLC_UNIT_V3_X)
+        new_transform:rotate(new_transform, self.rot.y , CPMLC_UNIT_V3_Y)
+        new_transform:rotate(new_transform, self.rot.z , CPMLC_UNIT_V3_Z)
+        --]]
+        self.direction = (new_transform*(CPMLF_NEW_VEC3(0,0,-1)))
     end
+    
+    self.calculateTransform()
+
 
     function  self.lookAt(target)
-        local v2d_1 = cpml.vec2(self.pos.x,self.pos.y)
-        local v2d_trg = cpml.vec2(target.pos.x,target.pos.y)
-        local angle = cpml.vec2.angle_to(v2d_1,v2d_trg )
-        local angle2 = math.atan2( cpml.vec2.dist(v2d_1,v2d_trg), self.pos.z-target.pos.z )
+        local v2d_1 = CPMLF_NEW_VEC2(self.pos.x,self.pos.y)
+        local v2d_trg = CPMLF_NEW_VEC2(target.pos.x,target.pos.y)
+        local angle = CPMLF_VEC2_ANGLE2(v2d_1,v2d_trg )
+        local angle2 = math.atan2( CPMLF_VEC2_DIST(v2d_1,v2d_trg), self.pos.z-target.pos.z )
         
         self.rot.z = angle-math.rad(90)
         self.rot.x = angle2
@@ -330,11 +439,11 @@ function quinta.Camera(camera_type, renderWidth, renderHeight)
 
     function self.calculateViewMatrix()
         self.camera_view = cpml.mat4()
-        self.camera_view:translate(self.camera_view, cpml.vec3(self.pos.x,-self.pos.y,-self.pos.z))
+        self.camera_view:translate(self.camera_view, CPMLF_NEW_VEC3(self.pos.x,-self.pos.y,-self.pos.z))
     
-        self.camera_view:rotate(self.camera_view, self.rot.z, cpml.vec3.unit_z)
-        self.camera_view:rotate(self.camera_view, self.rot.y, cpml.vec3.unit_y)
-        self.camera_view:rotate(self.camera_view, self.rot.x, cpml.vec3.unit_x)
+        self.camera_view:rotate(self.camera_view, self.rot.z, CPMLC_UNIT_V3_Z)
+        self.camera_view:rotate(self.camera_view, self.rot.y, CPMLC_UNIT_V3_Y)
+        self.camera_view:rotate(self.camera_view, self.rot.x, CPMLC_UNIT_V3_X)
         self.camera_view = TransposeMatrix(self.camera_view)
     end            
     
@@ -343,79 +452,198 @@ function quinta.Camera(camera_type, renderWidth, renderHeight)
     return self
 end
 
+function quinta.pPlane(sw,sh)
+    --a cube is composed of 12 triangles
+    --and 8 vertex, and later append their uv coords
+    local face_list = {}
+    local x0,y0,z0 = -sw/2, -sh/2, 0
+    local x1,y1,z1 = sw/2, sh/2, 0
+    local A = {x0, y0, z0}
+    local B = {x0, y0, z1}
+    local C = {x1, y0, z1}
+    local D = {x1, y0, z0}
+    local E = {x0, y1, z0}
+    local F = {x0, y1, z1}
+    local G = {x1, y1, z1}
+    local H = {x1, y1, z0}
+    
+    face_list[#face_list+1] = table_append(C,0,0)
+    face_list[#face_list+1] = table_append(B,1,0)
+    face_list[#face_list+1] = table_append(F,1,1)
+    face_list[#face_list+1] = table_append(F,1,1)
+    face_list[#face_list+1] = table_append(G,0,1)
+    face_list[#face_list+1] = table_append(C,0,0)
+    
+    return face_list
+end
+
+function quinta.AABB(sw,sh,sd)
+    local self = quinta.Space3D()
+    self.pos = CPMLF_NEW_VEC3(0,0,0)
+    self.scale = CPMLF_NEW_VEC3(sw,sh,sd) --the size of the bounding box is equal to the scale
+    self.offset = CPMLF_NEW_VEC3(0,0,0)
+    self.transform = nil 
+    self.color = {0,1,0,1}
+    self.min = CPMLF_NEW_VEC3(-sw/2, -sh/2, -sd/2)
+    self.max = CPMLF_NEW_VEC3(sw/2, sh/2, sd/2)
+    
+    function self.setOffset()
+        
+    end
+    
+    function self.calculateTransform()
+        --move the model...
+        local new_transform = nil
+        new_transform = CPMLF_IDENTITY_MATRIX()
+        
+        new_transform:scale(new_transform, self.scale)
+        new_transform:translate(new_transform, CPMLF_NEW_VEC3(-self.pos.x,self.pos.y,self.pos.z))
+        
+        self.transform = TransposeMatrix(new_transform)
+    end
+    
+    self.calculateTransform()
+    --this is similar to the renderMe method on the instance 3D, but more simple
+    function self.renderMe(shader, renderWidth,renderHeight)
+        for _, mesh in ipairs(DEFAULT_CUBE_MODEL.meshes) do
+            --this is horrible... 
+            shader:send("Model_Matrix", self.transform)
+            
+            love.graphics.setMeshCullMode('back') --back
+            love.graphics.setWireframe(true) --self.wireframe
+            --render only the vertex of the material...
+            DEFAULT_CUBE_MODEL.mesh:setDrawRange(mesh.first, mesh.last)
+            love.graphics.setColor(self.color[1],self.color[2],self.color[3],self.color[4])
+            love.graphics.draw(DEFAULT_CUBE_MODEL.mesh, -renderWidth/2, -renderHeight/2)
+            
+            love.graphics.setMeshCullMode("none")
+        end
+        love.graphics.setWireframe(false)
+    end
+    
+    return self
+end
+
+function quinta.pCube(sw,sh,sd)
+    --a cube is composed of 12 triangles
+    --and 8 vertex, and later append their uv coords
+    local face_list = {}
+    local x0,y0,z0 = -sw/2, -sh/2, -sd/2
+    local x1,y1,z1 = sw/2, sh/2, sd/2
+    local A = {x0, y0, z0}
+    local B = {x0, y0, z1}
+    local C = {x1, y0, z1}
+    local D = {x1, y0, z0}
+    local E = {x0, y1, z0}
+    local F = {x0, y1, z1}
+    local G = {x1, y1, z1}
+    local H = {x1, y1, z0}
+    
+    face_list[#face_list+1] = table_append(A,1,1)
+    face_list[#face_list+1] = table_append(B,1,0)
+    face_list[#face_list+1] = table_append(C,0,0)
+    face_list[#face_list+1] = table_append(C,0,0)
+    face_list[#face_list+1] = table_append(D,0,1)
+    face_list[#face_list+1] = table_append(A,1,1)
+    
+    face_list[#face_list+1] = table_append(A,0,1)
+    face_list[#face_list+1] = table_append(E,1,1)
+    face_list[#face_list+1] = table_append(F,1,0)
+    face_list[#face_list+1] = table_append(F,1,0)
+    face_list[#face_list+1] = table_append(B,0,0)
+    face_list[#face_list+1] = table_append(A,0,1)
+    
+    face_list[#face_list+1] = table_append(D,1,1)
+    face_list[#face_list+1] = table_append(C,1,0)
+    face_list[#face_list+1] = table_append(G,0,0)
+    face_list[#face_list+1] = table_append(G,0,0)
+    face_list[#face_list+1] = table_append(H,0,1)
+    face_list[#face_list+1] = table_append(D,1,1)
+    
+    face_list[#face_list+1] = table_append(E,0,1)
+    face_list[#face_list+1] = table_append(H,1,1)
+    face_list[#face_list+1] = table_append(G,1,0)
+    face_list[#face_list+1] = table_append(G,1,0)
+    face_list[#face_list+1] = table_append(F,0,0)
+    face_list[#face_list+1] = table_append(E,0,1)
+    
+    face_list[#face_list+1] = table_append(H,0,0)
+    face_list[#face_list+1] = table_append(E,1,0)
+    face_list[#face_list+1] = table_append(A,1,1)
+    face_list[#face_list+1] = table_append(A,1,1)
+    face_list[#face_list+1] = table_append(D,0,1)
+    face_list[#face_list+1] = table_append(H,0,0)
+    
+    face_list[#face_list+1] = table_append(C,0,0)
+    face_list[#face_list+1] = table_append(B,1,0)
+    face_list[#face_list+1] = table_append(F,1,1)
+    face_list[#face_list+1] = table_append(F,1,1)
+    face_list[#face_list+1] = table_append(G,0,1)
+    face_list[#face_list+1] = table_append(C,0,0)
+    
+    return face_list
+end
+
 
 function quinta.Instance3D()
-    local self = {}
+    local self = quinta.Space3D()
     self.model = nil
     self.culling = 'back'
-    self.pos = cpml.vec3(0,0,0)
-    self.rot = cpml.vec3(0,0,0)
-    self.scale = cpml.vec3(1,1,1)
+    
     self.materials = nil 
-    self.model_transform = nil
+    self.transform = nil
     self.model_rot_transform = nil
     self.wireframe = false
+    self.color = {1,1,1,1}
     self.animation = nil
-
+    
+    --this sets the color of tint, it does not change the vertex color
+    function self.setColor(r,g,b,a)
+        self.color[1] = r or 1
+        self.color[2] = g or 1
+        self.color[3] = b or 1
+        self.color[4] = a or 1
+    end
+    
     function  self.setWireframe(val)
         self.wireframe = val or false
     end
 
     --we defined this function is to tranform the mesh to be draw
-    function self.transform()
+    function self.calculateTransform()
         --move the model...
         local new_transform = nil
-        new_transform = cpml.mat4.identity()
+        new_transform = CPMLF_IDENTITY_MATRIX()
         
         -- apply rotations
         new_transform:scale(new_transform, self.scale)
 
-        new_transform:rotate(new_transform, self.rot.z , cpml.vec3.unit_z)
-        new_transform:rotate(new_transform, self.rot.y , cpml.vec3.unit_y)
-        new_transform:rotate(new_transform, self.rot.x , cpml.vec3.unit_x)
+        new_transform:rotate(new_transform, self.rot.z , CPMLC_UNIT_V3_Z)
+        new_transform:rotate(new_transform, self.rot.y , CPMLC_UNIT_V3_Y)
+        new_transform:rotate(new_transform, self.rot.x , CPMLC_UNIT_V3_X)
         
-        new_transform:translate(new_transform, cpml.vec3(-self.pos.x,self.pos.y,self.pos.z))
+        new_transform:translate(new_transform, CPMLF_NEW_VEC3(-self.pos.x,self.pos.y,self.pos.z))
 
-        self.model_transform = TransposeMatrix(new_transform)
+        self.transform = TransposeMatrix(new_transform)
 
-        new_transform = cpml.mat4.identity()
-        new_transform:translate(new_transform, cpml.vec3(0,0,0))
+        new_transform = CPMLF_IDENTITY_MATRIX()
+        new_transform:translate(new_transform, CPMLF_NEW_VEC3(0,0,0))
         -- apply rotations
-        new_transform:rotate(new_transform, -self.rot.x , cpml.vec3.unit_x)
-        new_transform:rotate(new_transform, -self.rot.y , cpml.vec3.unit_y)
-        new_transform:rotate(new_transform, -self.rot.z , cpml.vec3.unit_z)
+        new_transform:rotate(new_transform, -self.rot.x , CPMLC_UNIT_V3_X)
+        new_transform:rotate(new_transform, -self.rot.y , CPMLC_UNIT_V3_Y)
+        new_transform:rotate(new_transform, -self.rot.z , CPMLC_UNIT_V3_Z)
 
         self.model_rot_transform = new_transform
         --]]
     end
 
-    self.transform()
+    self.calculateTransform()
     
-    function self.setPos(x,y,z)
-        if x then self.pos.x = x end
-        if y then self.pos.y = y end
-        if z then self.pos.z = z end
-        self.transform()
-    end
-
-    function  self.setRot(x,y,z)
-        if x then self.rot.x = x end
-        if y then self.rot.y = y end
-        if z then self.rot.z = z end
-        self.transform()
-    end
-    
-    function  self.setScale(x,y,z)
-        if x then self.scale.x = x end
-        if y then self.scale.y = y end
-        if z then self.scale.z = z end
-        self.transform()
-    end
 
     function self.renderMe(shader, renderWidth,renderHeight, layer)
         for _, mesh in ipairs(self.layer_meshes[layer]) do
             --this is horrible... 
-            shader:send("Model_Matrix", self.model_transform)
+            shader:send("Model_Matrix", self.transform)
             --shader:send("Model_Rot_Matrix", self.model_rot_transform)
             --shader:send("use_vertex_color", (self.materials[mesh.material] == nil))
             --shader:send("use_animation",false)
@@ -427,7 +655,7 @@ function quinta.Instance3D()
             love.graphics.setWireframe(self.materials[mesh.material].wired) --self.wireframe
             --render only the vertex of the material...
             self.model.mesh:setDrawRange(mesh.first, mesh.last)
-            love.graphics.setColor(1,1,1,1)
+            love.graphics.setColor(self.color[1],self.color[2],self.color[3],self.color[4])
             love.graphics.draw(self.model.mesh, -renderWidth/2, -renderHeight/2)
             
             love.graphics.setMeshCullMode("none")
@@ -461,50 +689,54 @@ function quinta.Instance3D()
     end
 
     function self.composedBillboardTo(target)
-        local v2d_1 = cpml.vec2(self.pos.x,self.pos.y)
-        local v2d_trg = cpml.vec2(target.pos.x,target.pos.y)
-        local angle2 = math.atan2( cpml.vec2.dist(v2d_1,v2d_trg), target.pos.z-self.pos.z )
-        local new_transform = cpml.mat4.identity()
-
-        self.rot.z = math.rad(180)-target.rot.z
-        self.rot.x = angle2-math.rad(90)
+        local v2d_1 = CPMLF_NEW_VEC2(self.pos.x,self.pos.y)
+        local v2d_trg = CPMLF_NEW_VEC2(target.pos.x,target.pos.y)
+        local angle2 = math.atan2( CPMLF_VEC2_DIST(v2d_1,v2d_trg), target.pos.z-self.pos.z )
+        local new_transform = CPMLF_IDENTITY_MATRIX()
         
         --I hate the Gimbal lock problem...
-        new_transform:rotate(new_transform, self.rot.y , cpml.vec3.unit_y)
-        new_transform:rotate(new_transform, self.rot.x , cpml.vec3.unit_x)
-        new_transform:rotate(new_transform, self.rot.z , cpml.vec3.unit_z)
+        new_transform:rotate(new_transform, self.rot.y , CPMLC_UNIT_V3_Y)
+        new_transform:rotate(new_transform, self.rot.x + angle2, CPMLC_UNIT_V3_X)
+        new_transform:rotate(new_transform, self.rot.z + target.rot.z, CPMLC_UNIT_V3_Z)
 
-        new_transform:translate(new_transform, cpml.vec3(-self.pos.x,self.pos.y,self.pos.z))
-        self.model_transform = TransposeMatrix(new_transform)
+        new_transform:translate(new_transform, CPMLF_NEW_VEC3(-self.pos.x,self.pos.y,self.pos.z))
+        self.transform = TransposeMatrix(new_transform)
     end
 
-    function self.billboardTo(target)
-        self.rot.z = math.rad(180)-target.rot.z
-        self.transform()
+    function self.billboardTo(target,angle)
+        local angle = angle or 0
+        self.rot.z = angle-target.rot.z
+        self.calculateTransform()
     end
 
-    function self.faceTo(target)
-        local angle = cpml.vec2.angle_to(cpml.vec2(self.pos.x,-self.pos.y),cpml.vec2(target.pos.x,-target.pos.y))
-        self.setRot(nil,nil,math.rad(90)+angle)
+    function self.faceTo(target,nangle)
+        local nangle = nangle or 0 
+        local angle = CPMLF_VEC2_ANGLE2(CPMLF_NEW_VEC2(self.pos.x,-self.pos.y),CPMLF_NEW_VEC2(target.pos.x,-target.pos.y))
+        self.setRot(nil,nil,nangle-angle)
     end
 
     function  self.lookAt(target)
-        local v2d_1 = cpml.vec2(self.pos.x,self.pos.y)
-        local v2d_trg = cpml.vec2(target.pos.x,target.pos.y)
-        local angle = cpml.vec2.angle_to(v2d_1,v2d_trg )
-        local angle2 = math.atan2( cpml.vec2.dist(v2d_1,v2d_trg), self.pos.z-target.pos.z )
-        local new_transform = cpml.mat4.identity()
+        local v2d_1 = CPMLF_NEW_VEC2(self.pos.x,self.pos.y)
+        local v2d_trg = CPMLF_NEW_VEC2(target.pos.x,target.pos.y)
+        local angle = CPMLF_VEC2_ANGLE2(v2d_1,v2d_trg )
+        local angle2 = math.atan2( CPMLF_VEC2_DIST(v2d_1,v2d_trg), self.pos.z-target.pos.z )
+        local new_transform = CPMLF_IDENTITY_MATRIX()
         
-        self.rot.z = angle-math.rad(90)
-        self.rot.x = angle2-math.rad(90)
+        --if x then self.rot.x = x end
+        --if y then self.rot.y = y end
+        --if z then self.rot.z = z end
+        
+        --self.rot.z = angle--math.rad(90)
+        --self.rot.x = angle2---math.rad(90)
+        
         
         --I hate the Gimbal lock problem...
-        new_transform:rotate(new_transform, self.rot.y , cpml.vec3.unit_y)
-        new_transform:rotate(new_transform, -self.rot.x , cpml.vec3.unit_x)
-        new_transform:rotate(new_transform, -self.rot.z , cpml.vec3.unit_z)
+        new_transform:rotate(new_transform, self.rot.y , CPMLC_UNIT_V3_Y)
+        new_transform:rotate(new_transform, self.rot.x-angle2 , CPMLC_UNIT_V3_X)
+        new_transform:rotate(new_transform, self.rot.z-angle , CPMLC_UNIT_V3_Z)
 
-        new_transform:translate(new_transform, cpml.vec3(-self.pos.x,self.pos.y,self.pos.z))
-        self.model_transform = TransposeMatrix(new_transform)
+        new_transform:translate(new_transform, CPMLF_NEW_VEC3(-self.pos.x,self.pos.y,self.pos.z))
+        self.transform = TransposeMatrix(new_transform)
     end
 
     return self
@@ -520,10 +752,19 @@ function quinta.Object3D(data,texture_data)
             --self.culling = 'front'
         else
             self.model = iqm.load(data,false,true)
+            self.bound = self.model.bounds[#self.model.bounds]
+            --[[
+            for k,v in pairs(self.model.bounds) do
+                for k1,v1 in pairs(v) do
+                    print('--->',k1,v1[1],v1[2],v1[3])
+                end
+                print('::',k)
+            end
+            --]]
             --self.animation = anim9(iqm.load_anims(data))
         end
     else
-        --we asumed is not a url, but user mesh data
+        --we asumed is not a path, but user mesh data
         self.model = quinta.newModel(data)
     end
     print(data)
@@ -608,14 +849,15 @@ function quinta.Object3D(data,texture_data)
     return self
 end
 
+
 --The only job of this class is render the objects, nothing more
 --use it to render a single object, or add objects to be render on a single pass
 --needs a camera to render
 function quinta.Renderer(resolution_x,resolution_y)
     local self = {}
     --local camTransform = cpml.mat4()
-    --local obj_pos2d = cpml.vec2.new(0,0)
-    local cam_dir2d = cpml.vec2.new(0,0)
+    local obj_pos2d = CPMLF_NEW_VEC2.new(0,0)
+    local cam_dir2d = CPMLF_NEW_VEC2(0,0)
     
     local love_width, love_height = love.graphics.getDimensions( )
     local renderWidth  = resolution_x or love_width 
@@ -627,6 +869,8 @@ function quinta.Renderer(resolution_x,resolution_y)
     startupRender()
     self.shader = DEFAULT_SHADER
     local object_list = {}
+    --this list is to add the aabb to be rendered
+    local collition_list = {}
     --local light_list = {}
 
     --local ambientLight = 0.25
@@ -634,14 +878,14 @@ function quinta.Renderer(resolution_x,resolution_y)
     self.light = {}
     self.light.pos = {0,0,0}
     self.light.color = {1,1,1}
-    self.bgcolor = {0,0,0}
+    self.bgcolor = {0,0,0,1}
     self.offset_d = 0
     self.render_percent = 0
 
     self.heap = CHeap()
     self.heap.compare = function(a,b)
-        local distance_a = cpml.vec3.dist2(self.camera.pos, a.pos)
-        local distance_b = cpml.vec3.dist2(self.camera.pos, b.pos)
+        local distance_a = CPMLF_VEC3_DIST2(self.camera.pos, a.pos)
+        local distance_b = CPMLF_VEC3_DIST2(self.camera.pos, b.pos)
         return distance_a >= distance_b
     end
     
@@ -666,6 +910,13 @@ function quinta.Renderer(resolution_x,resolution_y)
                 break
             end
         end
+    end
+    
+    
+    
+    --clear all the objects of the current render list
+    function self.clearObjects()
+        object_list = {}
     end
 
     function  self.setCamera(new_camera)
@@ -697,12 +948,18 @@ function quinta.Renderer(resolution_x,resolution_y)
     --function self.renderAll(shader)
     --    
     --end
+    function self.setBackgroundColor(r,g,b,a)
+        self.bgcolor[1] = r or 0
+        self.bgcolor[2] = g or 0
+        self.bgcolor[3] = b or 0
+        self.bgcolor[4] = a or 1
+    end
 
     function self.render()
         
         love.graphics.setCanvas({self.canvas, depth=true})
         
-            love.graphics.clear(self.bgcolor[1],self.bgcolor[2],self.bgcolor[3],1)
+            love.graphics.clear(self.bgcolor[1],self.bgcolor[2],self.bgcolor[3],self.bgcolor[4])
 
             love.graphics.setColor(1,1,1)
 
@@ -719,8 +976,7 @@ function quinta.Renderer(resolution_x,resolution_y)
             --self.shader:send("lightPos",self.light.pos,{0,0,0})
             
             self.heap.clear()
-
-
+            
             cam_dir2d.x = math.sin(self.camera.rot.z)
             cam_dir2d.y = -math.cos(self.camera.rot.z)
             local i = 1
@@ -753,6 +1009,7 @@ function quinta.Renderer(resolution_x,resolution_y)
                 object_to_render.renderMe(self.shader, self.camera.renderWidth, self.camera.renderHeight, 1)
                 --layer two for translucid
                 object_to_render.renderMe(self.shader, self.camera.renderWidth, self.camera.renderHeight, 2)
+                
                 object_to_render = self.heap.pop() 
             end
 
