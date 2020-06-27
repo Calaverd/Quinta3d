@@ -22,6 +22,7 @@ local DEFAULT_DISTORTION = nil
 local DEFAULT_TEXTURE = nil
 --we create a default cube mesh to show aabb 
 local DEFAULT_CUBE_MODEL = nil
+local DEFAULT_PLANE_MODEL = nil
 --any small bost of speed is welcome... 
 --CPMLF = Cirno Perfect Math Library Function
 local CPMLF_IDENTITY_MATRIX = cpml.mat4.identity
@@ -37,6 +38,9 @@ local CPMLF_NEW_VEC3 = cpml.vec3
 local CPMLC_UNIT_V3_X = cpml.vec3.unit_x
 local CPMLC_UNIT_V3_Y = cpml.vec3.unit_y
 local CPMLC_UNIT_V3_Z = cpml.vec3.unit_z
+
+local MAX = math.max
+local MIN = math.min
 --local UPDIR = CPMLF_NEW_VEC3(0,0,1)
 
 local function table_append(i_table, ...)
@@ -73,7 +77,8 @@ local function startupRender()
     DEFAULT_TEXTURE = love.graphics.newImage(temp_canvas:newImageData())
     temp_canvas = nil
     
-    DEFAULT_CUBE_MODEL =  quinta.newModel(quinta.pCube(1,1,1))
+    DEFAULT_CUBE_MODEL =  quinta.newModel(quinta.pCubeDF(1,1,1))
+    DEFAULT_PLANE_MODEL =  quinta.newModel(quinta.pPlaneDF(1,1))
 end
 
 local function TransposeMatrix(mat)
@@ -206,39 +211,83 @@ local function CHeap()
 end
 
 
-function quinta.newModel(vertex_data,material_data)
-    local model = {}
+local function loadObj(path)
+    local obj = obj_reader.load(path)
+	local faces = {}
+	local verts = {}
+	
+	for _,v in ipairs(obj.v) do
+		table.insert(verts, {v.x,v.y,v.z})
+	end
+  
+  for _, vrtx in ipairs(obj.f) do
+      --add the first 3 vertices 
+      local j = 1
+      while j < 4 do
+          local x, y, z = verts[vrtx[j].v][1], verts[vrtx[j].v][2], verts[vrtx[j].v][3]
+          local u, v =  obj.vt[vrtx[j].vt].u,  obj.vt[vrtx[j].vt].v
+          local nx, ny, nz = obj.vn[vrtx[j].vn].x, obj.vn[vrtx[j].vn].y, obj.vn[vrtx[j].vn].z
+          -- {position, uv, rgb, normal}
+          table.insert(faces, {x,y,z, u,v, 1,1,1, nx,ny,nz})
+          j=j+1
+      end
+  end
+	return faces, obj.mtl
+end
+
+function quinta.ObjToColTriangles(path)
+    local obj = obj_reader.load(path)
+	local triangles = {}
+    local verts = {}
+	
+	for _,v in ipairs(obj.v) do
+		table.insert(verts, {v.x,v.y,v.z})
+	end
+  
+    local vertex = {}
+    for _, vrtx in ipairs(obj.f) do
+        --add the first 3 vertices 
+        local j = 1
+        while j < 4 do
+            vertex[j] = CPMLF_NEW_VEC3(verts[vrtx[j].v][1]*(-1), verts[vrtx[j].v][2], verts[vrtx[j].v][3])
+            j=j+1
+        end
+        --.colTriangleMStatic
+        table.insert(triangles, quinta.colTriangle(vertex[1],vertex[2],vertex[3]) )
+    end
+    
+	return triangles
+end
+
+local function validateTextureData(texture_data)
+    if type(texture_data) == "string" then
+        local texture = love.graphics.newImage(texture_data, { mipmaps = true })
+        texture:setFilter("nearest", "nearest") 
+        texture:setWrap("repeat","repeat")
+        return texture
+    end
+    return texture_data
+end
+
+function quinta.Material3D(diffuse,normal,distortion, layer)
+    local self = {}
+    self.diffuse      = validateTextureData(diffuse) or DEFAULT_TEXTURE
+    self.distortion   = validateTextureData(distortion) or DEFAULT_DISTORTION
+    self.normal       = validateTextureData(normal) 
+    self.render_layer = layer or 1
+    self.wired = false
+    --print('new material diffuse is:', self.diffuse)
+    return self
+end
+
+function quinta.newMesh(vertex_data)
     local mesh_format = {
         {"VertexPosition", "float", 3},
         {"VertexTexCoord", "float", 2},
         {"VertexColor", "float", 3},
         {"VertexNormal", "float", 3}
     }
-
-    model.mesh = nil
-    model.meshes = {}
-    if not material_data then --create a empty material data
-        local temp = {}
-        temp.first    = 1 --the first vertex that uses that material....
-        temp.count    = math.floor(#vertex_data) --the number of vertex that use that material
-        temp.last     = temp.first + temp.count
-        temp.material = "Material_0"
-        temp.name     = "UserMesh "..tostring(model)
-        table.insert(model.meshes,temp)
-    else
-        local i = 1
-        while material_data[i] do 
-            local temp = {}
-            temp.first    = material_data[i+1] --the first vertex that uses that material....
-            temp.count    = material_data[i+2] --the number of vertex that use that material
-            temp.last     = material_data[i+3]
-            temp.material = material_data[i]
-            temp.name     = material_data[i]..'.mesh'
-            table.insert(model.meshes,temp)
-            i=i+4
-        end
-    end
-    --print('num faces = ', #vertex_data)
+    
     if #vertex_data > 0 then
         for i=1, #vertex_data do
             --uv coords ? 
@@ -267,56 +316,43 @@ function quinta.newModel(vertex_data,material_data)
                 vertex_data[i][11] = normal_vector.z
             end 
         end
-
-        model.mesh = love.graphics.newMesh(mesh_format, vertex_data, "triangles")
+        return love.graphics.newMesh(mesh_format, vertex_data, "triangles")
     end
+    return nil
+end
+
+
+function quinta.newModel(vertex_data,material_data)
+    local model = {}
+    
+
+    model.mesh = nil
+    model.meshes = {}
+    if not material_data then --create a empty material data
+        local temp = {}
+        temp.first    = 1 --the first vertex that uses that material....
+        temp.count    = math.floor(#vertex_data) --the number of vertex that use that material
+        temp.last     = temp.first + temp.count
+        temp.material = "Material_0"
+        temp.name     = "UserMesh "..tostring(model)
+        table.insert(model.meshes,temp)
+    else
+        local i = 1
+        while material_data[i] do 
+            local temp = {}
+            temp.first    = material_data[i+1] --the first vertex that uses that material....
+            temp.count    = material_data[i+2] --the number of vertex that use that material
+            temp.last     = material_data[i+3]
+            temp.material = material_data[i]
+            temp.name     = material_data[i]..'.mesh'
+            table.insert(model.meshes,temp)
+            i=i+4
+        end
+    end
+    --print('num faces = ', #vertex_data)
+    model.mesh = quinta.newMesh(vertex_data)
 
     return model
-end
-
-local function loadObj(path)
-    local obj = obj_reader.load(path)
-	local faces = {}
-	local verts = {}
-	
-	for _,v in ipairs(obj.v) do
-		table.insert(verts, {v.x,v.y,v.z})
-	end
-  
-  for _, vrtx in ipairs(obj.f) do
-      --add the first 3 vertices 
-      local j = 1
-      while j < 4 do
-          local x, y, z = verts[vrtx[j].v][1], verts[vrtx[j].v][2], verts[vrtx[j].v][3]
-          local u, v =  obj.vt[vrtx[j].vt].u,  obj.vt[vrtx[j].vt].v
-          local nx, ny, nz = obj.vn[vrtx[j].vn].x, obj.vn[vrtx[j].vn].y, obj.vn[vrtx[j].vn].z
-          -- {position, uv, rgb, normal}
-          table.insert(faces, {x,y,z, u,v, 1,1,1, nx,ny,nz})
-          j=j+1
-      end
-  end
-	return faces, obj.mtl
-end
-
-local function validateTextureData(texture_data)
-    if type(texture_data) == "string" then
-        local texture = love.graphics.newImage(texture_data, { mipmaps = true })
-        texture:setFilter("nearest", "nearest") 
-        texture:setWrap("repeat","repeat")
-        return texture
-    end
-    return texture_data
-end
-
-function quinta.Material3D(diffuse,normal,distortion, layer)
-    local self = {}
-    self.diffuse      = validateTextureData(diffuse) or DEFAULT_TEXTURE
-    self.distortion   = validateTextureData(distortion) or DEFAULT_DISTORTION
-    self.normal       = validateTextureData(normal) 
-    self.render_layer = layer or 1
-    self.wired = false
-    --print('new material diffuse is:', self.diffuse)
-    return self
 end
 
 --the basic description of location, rotation and scale of a object in 3d Space
@@ -375,6 +411,459 @@ function quinta.Space3D()
     return self
 end
 
+function quinta.pTriangleFromVectors(vA,vB,vC)
+    --a cube is composed of 12 triangles
+    --and 8 vertex, and later append their uv coords
+    local face_list = {}
+    
+    local A = {vA.x, vA.y, vA.z}
+    local B = {vB.x, vB.y, vB.z}
+    local C = {vC.x, vC.y, vC.z}
+    
+    face_list[#face_list+1] = table_append(A,0,0)
+    face_list[#face_list+1] = table_append(B,1,0)
+    face_list[#face_list+1] = table_append(C,1,1)
+    return face_list
+end
+
+function quinta.pPlaneFromVectors(vA,vB,vC,vD)
+    local face_list = {}
+    
+    local A = {vA.x, vA.y, vA.z}
+    local B = {vB.x, vB.y, vB.z}
+    local C = {vC.x, vC.y, vC.z}
+    local D = {vD.x, vD.y, vD.z}
+    
+    face_list[#face_list+1] = table_append(A,0,0)
+    face_list[#face_list+1] = table_append(B,1,0)
+    face_list[#face_list+1] = table_append(C,1,1)
+    face_list[#face_list+1] = table_append(C,1,1)
+    face_list[#face_list+1] = table_append(D,0,1)
+    face_list[#face_list+1] = table_append(A,0,0)
+    
+    return face_list
+end
+
+function quinta.pPlane(sw,sh)
+    --a cube is composed of 12 triangles
+    --and 8 vertex, and later append their uv coords
+    local face_list = {}
+    local x0,y0,z0 = -sw/2, -sh/2, 0
+    local x1,y1,z1 = sw/2, sh/2, 0
+    local B = {x0, y0, z1}
+    local C = {x1, y0, z1}
+    local F = {x0, y1, z1}
+    local G = {x1, y1, z1}
+    
+    face_list[#face_list+1] = table_append(C,0,0)
+    face_list[#face_list+1] = table_append(B,1,0)
+    face_list[#face_list+1] = table_append(F,1,1)
+    face_list[#face_list+1] = table_append(F,1,1)
+    face_list[#face_list+1] = table_append(G,0,1)
+    face_list[#face_list+1] = table_append(C,0,0)
+    
+    return face_list
+end
+
+--build a cube from their min and max vectors
+function quinta.pCubeMinMax(x0,y0,z0,x1,y1,z1)
+    --a cube is composed of 12 triangles
+    --and 8 vertex, and later append their uv coords
+    local face_list = {}
+    
+    local A = {x0, y0, z0}
+    local B = {x0, y0, z1}
+    local C = {x1, y0, z1}
+    local D = {x1, y0, z0}
+    local E = {x0, y1, z0}
+    local F = {x0, y1, z1}
+    local G = {x1, y1, z1}
+    local H = {x1, y1, z0}
+    
+    face_list[#face_list+1] = table_append(A,1,1)
+    face_list[#face_list+1] = table_append(B,1,0)
+    face_list[#face_list+1] = table_append(C,0,0)
+    face_list[#face_list+1] = table_append(C,0,0)
+    face_list[#face_list+1] = table_append(D,0,1)
+    face_list[#face_list+1] = table_append(A,1,1)
+    
+    face_list[#face_list+1] = table_append(A,0,1)
+    face_list[#face_list+1] = table_append(E,1,1)
+    face_list[#face_list+1] = table_append(F,1,0)
+    face_list[#face_list+1] = table_append(F,1,0)
+    face_list[#face_list+1] = table_append(B,0,0)
+    face_list[#face_list+1] = table_append(A,0,1)
+    
+    face_list[#face_list+1] = table_append(D,1,1)
+    face_list[#face_list+1] = table_append(C,1,0)
+    face_list[#face_list+1] = table_append(G,0,0)
+    face_list[#face_list+1] = table_append(G,0,0)
+    face_list[#face_list+1] = table_append(H,0,1)
+    face_list[#face_list+1] = table_append(D,1,1)
+    
+    face_list[#face_list+1] = table_append(E,0,1)
+    face_list[#face_list+1] = table_append(H,1,1)
+    face_list[#face_list+1] = table_append(G,1,0)
+    face_list[#face_list+1] = table_append(G,1,0)
+    face_list[#face_list+1] = table_append(F,0,0)
+    face_list[#face_list+1] = table_append(E,0,1)
+    
+    face_list[#face_list+1] = table_append(H,0,0)
+    face_list[#face_list+1] = table_append(E,1,0)
+    face_list[#face_list+1] = table_append(A,1,1)
+    face_list[#face_list+1] = table_append(A,1,1)
+    face_list[#face_list+1] = table_append(D,0,1)
+    face_list[#face_list+1] = table_append(H,0,0)
+    
+    face_list[#face_list+1] = table_append(C,0,0)
+    face_list[#face_list+1] = table_append(B,1,0)
+    face_list[#face_list+1] = table_append(F,1,1)
+    face_list[#face_list+1] = table_append(F,1,1)
+    face_list[#face_list+1] = table_append(G,0,1)
+    face_list[#face_list+1] = table_append(C,0,0)
+    
+    return face_list
+end
+
+function quinta.pCube(sw,sh,sd)
+    return quinta.pCubeMinMax(
+        -sw/2, -sh/2, -sd/2, --min
+        sw/2, sh/2, sd/2 --max
+        )
+end
+
+local function createDoubleFaced(face_list)
+    local i = 1
+    local initial_face_num = #face_list
+    --to create the inside part, we just change the 
+    --face vertex order from ccw to cw
+    while i < initial_face_num do
+        face_list[#face_list+1] = face_list[i]
+        face_list[#face_list+1] = face_list[i+2]
+        face_list[#face_list+1] = face_list[i+1]
+        i=i+3
+    end
+    
+    return face_list
+end
+
+function quinta.pPlaneDF(sw,sh)
+    --a cube is composed of 12 triangles
+    --and 8 vertex, and later append their uv coords
+    local face_list = createDoubleFaced(quinta.pPlane(sw,sh))
+    
+    return face_list
+end
+
+--a cube that is render also inside...
+--DF is for Double Faced
+function quinta.pCubeDF(sw,sh,sd)
+    --a cube is composed of 12 triangles
+    --and 8 vertex, and later append their uv coords
+    local face_list = createDoubleFaced(quinta.pCube(sw,sh,sd))
+    
+    
+    return face_list
+end
+
+function quinta.colAABB(sw,sh,sd)
+    local self = quinta.Space3D()
+    self.pos = CPMLF_NEW_VEC3(0,0,0)
+    self.scale = CPMLF_NEW_VEC3(sw,sh,sd) --the size of the bounding box is equal to the scale
+    self.offset = CPMLF_NEW_VEC3(0,0,0)
+    self.transform = nil 
+    self.color = {1,0,0,1}
+    self.orig_min = CPMLF_NEW_VEC3(-sw/2, -sh/2, -sd/2)
+    self.orig_max = CPMLF_NEW_VEC3(sw/2, sh/2, sd/2)
+    self.min = self.orig_min
+    self.max = self.orig_max
+    self.is_on_chunks = {}
+    self.cube_mesh = nil
+    self.second_color = {0,1,1,1}
+    
+    function self.setSecondColor(r,g,b,a)
+        self.second_color[1] = r or 1
+        self.second_color[2] = g or 1
+        self.second_color[3] = b or 1
+        self.second_color[4] = a or 0.5
+    end
+    
+    function self.buildNewCubeMesh()
+        self.cube_mesh = quinta.newMesh(
+          quinta.pCubeMinMax(self.min.x*(-1),self.min.y,self.min.z,
+            self.max.x*(-1),self.max.y,self.max.z)
+            )
+    end
+    
+    function self.setColor(r,g,b,a)
+        self.color[1] = r or 1
+        self.color[2] = g or 1
+        self.color[3] = b or 1
+        self.color[4] = a or 0.5
+    end
+    
+    function self.calculateTransform()
+        --move the model...
+        local new_transform = nil
+        new_transform = CPMLF_IDENTITY_MATRIX()
+        
+        new_transform:scale(new_transform, self.scale)
+        new_transform:translate(new_transform, CPMLF_NEW_VEC3(self.pos.x,self.pos.y,self.pos.z))
+        
+        self.transform = TransposeMatrix(new_transform)
+        
+        self.min = (new_transform*self.orig_min)
+        self.max = (new_transform*self.orig_max)
+    end
+    
+    self.calculateTransform()
+    
+    function self.intersectAABB(other)
+        return cpml.intersect.aabb_aabb(self,other)
+    end
+    
+    --this is similar to the renderMe method on the instance 3D, but more simple
+    function self.renderMe(shader, renderWidth,renderHeight)
+        local mesh = DEFAULT_CUBE_MODEL.meshes[1]
+    
+        love.graphics.setColor(self.color[1],self.color[2],self.color[3],self.color[4])
+        love.graphics.setMeshCullMode('back') --back
+        love.graphics.setWireframe(true) --self.wireframe
+        
+        if not self.cube_mesh then 
+            shader:send("Model_Matrix", self.transform)
+            --render only the vertex of the material...
+            DEFAULT_CUBE_MODEL.mesh:setDrawRange(mesh.first, mesh.last)
+            love.graphics.draw(DEFAULT_CUBE_MODEL.mesh, -renderWidth/2, -renderHeight/2)
+        else
+            shader:send("Model_Matrix", CPMLF_IDENTITY_MATRIX())
+            self.cube_mesh:setDrawRange(mesh.first, mesh.last)
+            love.graphics.draw(self.cube_mesh, -renderWidth/2, -renderHeight/2)
+        end
+        love.graphics.setMeshCullMode("none")
+        
+        love.graphics.setWireframe(false)
+    end
+    
+    return self
+end
+
+--A samll triange for colision detection
+--this is for static bodys
+function quinta.colTriangleMStatic(new_a,new_b,new_c)
+    local self = {}
+    self.triangle = {new_b,new_a,new_c}
+    
+    local min_x = MIN(MIN(new_a.x,new_b.x),new_c.x)
+    local min_y = MIN(MIN(new_a.y,new_b.y),new_c.y)
+    local min_z = MIN(MIN(new_a.z,new_b.z),new_c.z)
+    
+    local max_x = MAX(MAX(new_a.x,new_b.x),new_c.x)
+    local max_y = MAX(MAX(new_a.y,new_b.y),new_c.y)
+    local max_z = MAX(MAX(new_a.z,new_b.z),new_c.z)
+    
+    self.min = CPMLF_NEW_VEC3(min_x,min_y,min_z)
+    self.max = CPMLF_NEW_VEC3(max_x,max_y,max_z)
+    
+    function self.intersectAABB(other)
+        return cpml.intersect.aabb_aabb(self,other)
+    end
+    
+    return self
+end
+
+function quinta.colTriangle(vertex_a,vertex_b, vertex_c)
+    local self = quinta.colAABB(1,1,1)
+    self.transform = nil 
+    self.color = {1,0,1,1}
+    
+    
+    --a cube is composed of 12 triangles
+    --and 8 vertex, and later append their uv coords
+    self.triangle = {vertex_a,vertex_b,vertex_c}
+    
+    function self.buildNewTriangleMesh()
+        local a = self.triangle[1]
+        local b = self.triangle[2]
+        local c = self.triangle[3]
+        a.x = a.x*(-1)
+        b.x = b.x*(-1)
+        c.x = c.x*(-1)
+        self.triangle_mesh = quinta.newMesh(
+           quinta.pTriangleFromVectors(a,b,c)
+            )
+        a.x = a.x*(-1)
+        b.x = b.x*(-1)
+        c.x = c.x*(-1)
+    end
+    
+    
+    function self.calculateTransform()
+        --move the model...
+        local new_transform = nil
+        new_transform = CPMLF_IDENTITY_MATRIX()
+        
+        new_transform:scale(new_transform, self.scale)
+        
+        new_transform:rotate(new_transform, self.rot.z , CPMLC_UNIT_V3_Z)
+        new_transform:rotate(new_transform, -self.rot.y , CPMLC_UNIT_V3_Y)
+        new_transform:rotate(new_transform, self.rot.x , CPMLC_UNIT_V3_X)
+        
+        new_transform:translate(new_transform, CPMLF_NEW_VEC3(self.pos.x,self.pos.y,self.pos.z))
+        
+        self.transform = TransposeMatrix(new_transform)
+        local new_a = (new_transform*vertex_a)
+        local new_b = (new_transform*vertex_b)
+        local new_c = (new_transform*vertex_c)
+        self.triangle = {new_b,new_a,new_c}
+        
+        --calculate a new bounding box for the plane
+        local min_x = MIN(MIN(new_a.x,new_b.x),new_c.x)
+        local min_y = MIN(MIN(new_a.y,new_b.y),new_c.y)
+        local min_z = MIN(MIN(new_a.z,new_b.z),new_c.z)
+        
+        local max_x = MAX(MAX(new_a.x,new_b.x),new_c.x)
+        local max_y = MAX(MAX(new_a.y,new_b.y),new_c.y)
+        local max_z = MAX(MAX(new_a.z,new_b.z),new_c.z)
+        
+        self.min = CPMLF_NEW_VEC3(min_x,min_y,min_z)
+        self.max = CPMLF_NEW_VEC3(max_x,max_y,max_z)
+        
+        --flip the x value for the render...
+        
+    end
+    
+    self.calculateTransform()
+    --self.buildNewTriangleMesh()
+    
+    --this is similar to the renderMe method on the instance 3D, but more simple
+    local old_renderMe = self.renderMe 
+    self.renderMe = function(shader, renderWidth,renderHeight)
+        
+        self.buildNewTriangleMesh() --create a new mesh for the triangle
+        self.buildNewCubeMesh() 
+        
+        old_renderMe(shader, renderWidth,renderHeight)
+        local mesh = DEFAULT_PLANE_MODEL.meshes[1]
+        --this is horrible... 
+        love.graphics.setMeshCullMode('back') --back
+        shader:send("Model_Matrix", CPMLF_IDENTITY_MATRIX())
+        self.triangle_mesh:setDrawRange(mesh.first, mesh.last)
+        
+        love.graphics.setWireframe(true) --self.wireframe
+        love.graphics.setColor(self.second_color[1],self.second_color[2],self.second_color[3],self.second_color[4])
+        love.graphics.draw(self.triangle_mesh, -renderWidth/2, -renderHeight/2)
+        
+        love.graphics.setMeshCullMode("none")
+        
+        love.graphics.setWireframe(false)
+    end
+    
+    return self
+end
+
+--we use the reiange colision
+function quinta.colPlane(sw,sh)
+    local self = quinta.colAABB(sw,sh,1)
+    self.transform = nil 
+    self.color = {0,1,0,0.25}
+    
+    --a cube is composed of 12 triangles
+    --and 8 vertex, and later append their uv coords
+    self.triangles = {}
+    self.plane_mesh = nil
+    
+    local x0,y0 = -0.5, -0.5
+    local x1,y1,z1 = 0.5, 0.5, 0
+    
+    local vertex_a = CPMLF_NEW_VEC3(x1, y0, z1)
+    local vertex_b = CPMLF_NEW_VEC3(x0, y0, z1)
+    local vertex_c = CPMLF_NEW_VEC3(x0, y1, z1)
+    local vertex_d = CPMLF_NEW_VEC3(x1, y1, z1)
+    self.triangles[1] = {vertex_b,vertex_a,vertex_c}
+    self.triangles[2] = {vertex_d,vertex_c,vertex_a}
+    
+    
+    
+    function self.buildNewPlaneMesh()
+        local a = self.triangles[1][3]
+        local b = self.triangles[1][2]
+        local c = self.triangles[1][1]
+        local d = self.triangles[2][2]
+        
+        a.x = a.x*(-1)
+        b.x = b.x*(-1)
+        c.x = c.x*(-1)
+        d.x = d.x*(-1)
+        self.plane_mesh = quinta.newMesh(
+           createDoubleFaced(quinta.pPlaneFromVectors(a,b,c,d))
+            )
+        a.x = a.x*(-1)
+        b.x = b.x*(-1)
+        c.x = c.x*(-1)
+        d.x = d.x*(-1)
+    end
+    
+    function self.calculateTransform()
+        --move the model...
+        local new_transform = nil
+        new_transform = CPMLF_IDENTITY_MATRIX()
+        
+        new_transform:scale(new_transform, self.scale)
+        
+        new_transform:rotate(new_transform, self.rot.z , CPMLC_UNIT_V3_Z)
+        new_transform:rotate(new_transform, -self.rot.y , CPMLC_UNIT_V3_Y)
+        new_transform:rotate(new_transform, self.rot.x , CPMLC_UNIT_V3_X)
+        
+        new_transform:translate(new_transform, CPMLF_NEW_VEC3(self.pos.x,self.pos.y,self.pos.z))
+        
+        self.transform = TransposeMatrix(new_transform)
+        local new_a = (new_transform*vertex_a)
+        local new_b = (new_transform*vertex_b)
+        local new_c = (new_transform*vertex_c)
+        local new_d = (new_transform*vertex_d)
+        self.triangles[1] = {new_c,new_b,new_a}
+        self.triangles[2] = {new_a,new_d,new_c}
+        
+        --calculate a new bounding box for the plane
+        local min_x = MIN(MIN(MIN(new_a.x,new_b.x),new_c.x),new_d.x)
+        local min_y = MIN(MIN(MIN(new_a.y,new_b.y),new_c.y),new_d.y)
+        local min_z = MIN(MIN(MIN(new_a.z,new_b.z),new_c.z),new_d.z)
+        
+        local max_x = MAX(MAX(MAX(new_a.x,new_b.x),new_c.x),new_d.x)
+        local max_y = MAX(MAX(MAX(new_a.y,new_b.y),new_c.y),new_d.y)
+        local max_z = MAX(MAX(MAX(new_a.z,new_b.z),new_c.z),new_d.z)
+        
+        self.min = CPMLF_NEW_VEC3(min_x,min_y,min_z)
+        self.max = CPMLF_NEW_VEC3(max_x,max_y,max_z)
+         --create a new box for the cube
+    end
+    
+    self.calculateTransform()
+    --this is similar to the renderMe method on the instance 3D, but more simple
+    local old_renderMe = self.renderMe 
+    self.renderMe = function(shader, renderWidth,renderHeight)
+        self.buildNewPlaneMesh()
+        self.buildNewCubeMesh()
+        
+        old_renderMe(shader, renderWidth,renderHeight)
+        local mesh = DEFAULT_PLANE_MODEL.meshes[1]
+        --this is horrible... 
+        love.graphics.setMeshCullMode('back') --back
+        shader:send("Model_Matrix", CPMLF_IDENTITY_MATRIX())
+        self.plane_mesh:setDrawRange(mesh.first, mesh.last)
+        
+        love.graphics.setWireframe(true) --self.wireframe
+        love.graphics.setColor(self.second_color[1],self.second_color[2],self.second_color[3],self.second_color[4])
+        love.graphics.draw(self.plane_mesh, -renderWidth/2, -renderHeight/2)
+        
+        love.graphics.setMeshCullMode("none")
+        
+        love.graphics.setWireframe(false)
+    end
+    
+    return self
+end
 
 function quinta.Camera(camera_type, renderWidth, renderHeight)
     local self = quinta.Space3D()
@@ -455,139 +944,6 @@ function quinta.Camera(camera_type, renderWidth, renderHeight)
 
     return self
 end
-
-function quinta.pPlane(sw,sh)
-    --a cube is composed of 12 triangles
-    --and 8 vertex, and later append their uv coords
-    local face_list = {}
-    local x0,y0,z0 = -sw/2, -sh/2, 0
-    local x1,y1,z1 = sw/2, sh/2, 0
-    local A = {x0, y0, z0}
-    local B = {x0, y0, z1}
-    local C = {x1, y0, z1}
-    local D = {x1, y0, z0}
-    local E = {x0, y1, z0}
-    local F = {x0, y1, z1}
-    local G = {x1, y1, z1}
-    local H = {x1, y1, z0}
-    
-    face_list[#face_list+1] = table_append(C,0,0)
-    face_list[#face_list+1] = table_append(B,1,0)
-    face_list[#face_list+1] = table_append(F,1,1)
-    face_list[#face_list+1] = table_append(F,1,1)
-    face_list[#face_list+1] = table_append(G,0,1)
-    face_list[#face_list+1] = table_append(C,0,0)
-    
-    return face_list
-end
-
-function quinta.AABB(sw,sh,sd)
-    local self = quinta.Space3D()
-    self.pos = CPMLF_NEW_VEC3(0,0,0)
-    self.scale = CPMLF_NEW_VEC3(sw,sh,sd) --the size of the bounding box is equal to the scale
-    self.offset = CPMLF_NEW_VEC3(0,0,0)
-    self.transform = nil 
-    self.color = {0,1,0,1}
-    self.min = CPMLF_NEW_VEC3(-sw/2, -sh/2, -sd/2)
-    self.max = CPMLF_NEW_VEC3(sw/2, sh/2, sd/2)
-    
-    function self.setOffset()
-        
-    end
-    
-    function self.calculateTransform()
-        --move the model...
-        local new_transform = nil
-        new_transform = CPMLF_IDENTITY_MATRIX()
-        
-        new_transform:scale(new_transform, self.scale)
-        new_transform:translate(new_transform, CPMLF_NEW_VEC3(-self.pos.x,self.pos.y,self.pos.z))
-        
-        self.transform = TransposeMatrix(new_transform)
-    end
-    
-    self.calculateTransform()
-    --this is similar to the renderMe method on the instance 3D, but more simple
-    function self.renderMe(shader, renderWidth,renderHeight)
-        for _, mesh in ipairs(DEFAULT_CUBE_MODEL.meshes) do
-            --this is horrible... 
-            shader:send("Model_Matrix", self.transform)
-            
-            love.graphics.setMeshCullMode('back') --back
-            love.graphics.setWireframe(true) --self.wireframe
-            --render only the vertex of the material...
-            DEFAULT_CUBE_MODEL.mesh:setDrawRange(mesh.first, mesh.last)
-            love.graphics.setColor(self.color[1],self.color[2],self.color[3],self.color[4])
-            love.graphics.draw(DEFAULT_CUBE_MODEL.mesh, -renderWidth/2, -renderHeight/2)
-            
-            love.graphics.setMeshCullMode("none")
-        end
-        love.graphics.setWireframe(false)
-    end
-    
-    return self
-end
-
-function quinta.pCube(sw,sh,sd)
-    --a cube is composed of 12 triangles
-    --and 8 vertex, and later append their uv coords
-    local face_list = {}
-    local x0,y0,z0 = -sw/2, -sh/2, -sd/2
-    local x1,y1,z1 = sw/2, sh/2, sd/2
-    local A = {x0, y0, z0}
-    local B = {x0, y0, z1}
-    local C = {x1, y0, z1}
-    local D = {x1, y0, z0}
-    local E = {x0, y1, z0}
-    local F = {x0, y1, z1}
-    local G = {x1, y1, z1}
-    local H = {x1, y1, z0}
-    
-    face_list[#face_list+1] = table_append(A,1,1)
-    face_list[#face_list+1] = table_append(B,1,0)
-    face_list[#face_list+1] = table_append(C,0,0)
-    face_list[#face_list+1] = table_append(C,0,0)
-    face_list[#face_list+1] = table_append(D,0,1)
-    face_list[#face_list+1] = table_append(A,1,1)
-    
-    face_list[#face_list+1] = table_append(A,0,1)
-    face_list[#face_list+1] = table_append(E,1,1)
-    face_list[#face_list+1] = table_append(F,1,0)
-    face_list[#face_list+1] = table_append(F,1,0)
-    face_list[#face_list+1] = table_append(B,0,0)
-    face_list[#face_list+1] = table_append(A,0,1)
-    
-    face_list[#face_list+1] = table_append(D,1,1)
-    face_list[#face_list+1] = table_append(C,1,0)
-    face_list[#face_list+1] = table_append(G,0,0)
-    face_list[#face_list+1] = table_append(G,0,0)
-    face_list[#face_list+1] = table_append(H,0,1)
-    face_list[#face_list+1] = table_append(D,1,1)
-    
-    face_list[#face_list+1] = table_append(E,0,1)
-    face_list[#face_list+1] = table_append(H,1,1)
-    face_list[#face_list+1] = table_append(G,1,0)
-    face_list[#face_list+1] = table_append(G,1,0)
-    face_list[#face_list+1] = table_append(F,0,0)
-    face_list[#face_list+1] = table_append(E,0,1)
-    
-    face_list[#face_list+1] = table_append(H,0,0)
-    face_list[#face_list+1] = table_append(E,1,0)
-    face_list[#face_list+1] = table_append(A,1,1)
-    face_list[#face_list+1] = table_append(A,1,1)
-    face_list[#face_list+1] = table_append(D,0,1)
-    face_list[#face_list+1] = table_append(H,0,0)
-    
-    face_list[#face_list+1] = table_append(C,0,0)
-    face_list[#face_list+1] = table_append(B,1,0)
-    face_list[#face_list+1] = table_append(F,1,1)
-    face_list[#face_list+1] = table_append(F,1,1)
-    face_list[#face_list+1] = table_append(G,0,1)
-    face_list[#face_list+1] = table_append(C,0,0)
-    
-    return face_list
-end
-
 
 function quinta.Instance3D()
     local self = quinta.Space3D()
@@ -902,6 +1258,13 @@ function quinta.Renderer(resolution_x,resolution_y)
     --end
 
     function self.addObject(object)
+        local i = 1
+        while object_list[i] do
+            if object_list[i] == object then
+                return
+            end
+            i=i+1
+        end
         table.insert(object_list,object)
         --print(#object_list)
     end
@@ -913,6 +1276,7 @@ function quinta.Renderer(resolution_x,resolution_y)
                 table.remove(object_list, i)
                 break
             end
+            i=i+1
         end
     end
     
