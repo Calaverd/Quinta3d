@@ -1,30 +1,29 @@
-q3d = require "quinta"
+local q3d = require "quinta"
 
 local renderer = nil
 local mill = nil
 local mill_wheel = nil
 local tetrahedron = nil
 local tetrahedron_copies = {}
+local sprite = nil
 
 local use_mouse = true
 
-love.window.setMode(640,480,{resizable=true})
+love.window.setMode(1024,800,{resizable=true})
 love.window.setTitle('Quinta 3D - The World Worst 3D Engine!!!')
-
 
 function love.load()
     renderer = q3d.Renderer()
-    
     -- You can load a model using only the path
     -- if not texture is given, we use the vertex colors
     -- the engine supports iqm and obj models
     local old_one = q3d.Object3D('assets/cthulhu.iqm')
-     
+
     -- If needed you can add some texture
     local hare = q3d.Object3D('assets/hare.obj',"assets/textures/hare.png")
-    
+
     mill_wheel = q3d.Object3D('assets/mill_wheel.obj',"assets/textures/wood.png")
-    
+
     -- You can have objects that use multiple materials.
     mill = q3d.Object3D(
             "assets/mill3.obj",
@@ -47,7 +46,7 @@ function love.load()
     pyramidVerts[ 1] = {-1,1,1, 0,0, 0.1,0.2,1.0}
     pyramidVerts[ 2] = {1,1,-1, 0,1, 0.2,1.0,0.1}
     pyramidVerts[ 3] = {1,-1,1, 1,1}
-    
+
     pyramidVerts[ 4] = {-1,1,1,   0,0,  0.1,0.2,1.0}
     pyramidVerts[ 5] = {-1,-1,-1, 0,1, 1.0,0.2,0.1}
     pyramidVerts[ 6] = {1,1,-1,   1,1, 0.2,1.0,0.1}
@@ -55,33 +54,48 @@ function love.load()
     pyramidVerts[ 7] = {1,-1,1,   0,0}
     pyramidVerts[ 8] = {1,1,-1,   0,1, 0.2,1.0,0.1}
     pyramidVerts[ 9] = {-1,-1,-1, 1,1, 1.0,0.2,0.1}
-    
+
     pyramidVerts[10] = {-1,-1,-1, 0,0, 1.0,0.2,0.1}
     pyramidVerts[11] = {-1,1,1,   0,1, 0.1,0.2,1.0}
     pyramidVerts[12] = {1,-1,1,   1,1}
-    
+
     --send the vertex to create a new object, also put a texture
     tetrahedron = q3d.Object3D(pyramidVerts,'assets/textures/distortion_b.png')
-    
+
+    -- To create a new 3d sprite we need to give it a sprite sheet
+    -- and also specify the collumns and rows on it.
+    -- the first frame will be used.
+    sprite = q3d.Sprite3D('assets/woman.png', 4,2)
+    local wave_hand_anim =  q3d.spriteAnimation(
+        {1,2,3,4,5,4,5,4,5,4,5,2,1,1}, -- a list of frames of the animation
+        0.05,  -- duration between frames,
+        true -- the animation should loop, by default is false.
+    )
+    sprite.useAnimation(wave_hand_anim)
+
     --Change position, rotation, and scale of the objects 
     --mill.setPos(0,0,0) --0,0,0 is default position
-    hare.setPos(3,1.5,0.2)
-    hare.setRot(nil,nil,math.rad(-45))
-    
+    hare.setPos(3,1.5,0.2) -- our coords are x,y,z
+    hare.setRot(nil,nil,math.rad(-45)) -- in that same order the rotations are applied. 
+
+    sprite.setPos(4,0.5,0.1)
+
     old_one.setRot(nil,nil,math.rad(-90))
-    
+
     mill_wheel.setPos(0.1,2.7,1.45)
     mill_wheel.setRot(math.rad(90),0,0)
-    
+
     tetrahedron.setScale(0.25,0.25,0.25)
     tetrahedron.setPos(2,2,3)
 
-    -- Important, the objects need to be added to the renderer 
+    -- Important, the objects need to be added to the renderer
     renderer.addObject(mill)
     renderer.addObject(mill_wheel)
     renderer.addObject(hare)
     renderer.addObject(tetrahedron)
     renderer.addObject(old_one)
+    renderer.addObject(sprite)
+
     -- Create a set of instances of the tetrahedron.
     -- instances are independent objects that shared the same mesh data and materials
     -- we are gonna set their positions on the update bellow...
@@ -95,20 +109,20 @@ function love.load()
         renderer.addObject(new_t4)
         --add to this list, so we can later modify they.
         table.insert(tetrahedron_copies, new_t4)
-        
+
         scale = scale+0.25
         i=i+1
     end
 
     renderer.bgcolor = {0.0,0.1,0.2}
-    renderer.setCameraPos(12,4,4)
-    
+    renderer.setCameraPos(18,16,5)
+
     -- Set the camera to look on start to the tetrahedron.
     renderer.setCameraLookAt(tetrahedron)
 end
 
 
-function love.draw() 
+function love.draw()
 
     renderer.render()
     local info_text = [[
@@ -129,7 +143,7 @@ function love.draw()
     love.graphics.print(info_text,0,-1)
     love.graphics.setColor(1,1,1)
     love.graphics.print(info_text,0,0)
-    
+
 end
 
 local timer = 0
@@ -139,7 +153,7 @@ function love.update(dt)
     -- simple first-person camera movement
     love.mouse.setRelativeMode(use_mouse)
     if use_mouse then
-        
+
         local mx,my,mz = 0,0,0
         local speed = 0.15
         if love.keyboard.isDown("w") then
@@ -163,19 +177,23 @@ function love.update(dt)
 
         if mx ~= 0 or my ~= 0 then
             local angle = math.atan2(mx,my)
-            
+
             renderer.camera.pos.x = renderer.camera.pos.x + math.sin(renderer.camera.rot.z + angle)*speed*dt*60
             renderer.camera.pos.y = renderer.camera.pos.y - math.cos(renderer.camera.rot.z + angle)*speed*dt*60
-            
+
         end
         renderer.camera.pos.z = renderer.camera.pos.z + mz
     else
        renderer.setCameraLookAt(tetrahedron)
     end
 
+    -- Run the animation on the sprite and make it face the camera always
+    sprite.updateAnimation(dt)
+    sprite.billboardTo(renderer.camera, 0)
+
     -- Make the tetrahedron and the copies spin.
     timer = timer + dt/8
-    
+
     local angle = timer*3+math.pi*0.5
     local npos = {math.cos(angle)*5,math.sin(angle)*5,3}
     tetrahedron.setPos(unpack(npos))
@@ -212,7 +230,7 @@ function love.update(dt)
             current_vertex = current_vertex+1
         end
     end
-    
+
     -- The animation on the texture of the tetrahedron.
     -- Alter the mesh, also changes all their instances...
     mesh_list = tetrahedron.getMeshByMaterial('Material_0')
@@ -227,7 +245,7 @@ function love.update(dt)
             current_vertex = current_vertex+1
         end
     end
-    
+
 end
 
 function love.mousemoved(x,y, dx,dy)

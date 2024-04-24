@@ -17,7 +17,7 @@ local quinta = {
 quinta.intersect = cpml.intersect
 quinta.cpml = cpml
 
-local DEFAULT_SHADER = nil 
+local DEFAULT_SHADER = nil
 local DEFAULT_DISTORTION = nil
 local DEFAULT_TEXTURE = nil
 --we create a default cube mesh to show aabb 
@@ -49,11 +49,11 @@ local function table_append(i_table, ...)
     for k,v in pairs(i_table) do
         o_table[k] = v
     end
-    
+
     for _,v in pairs({...}) do
         o_table[#o_table+1] = v
     end
-    
+
     return o_table
 end
 
@@ -62,7 +62,7 @@ end
 local function startupRender()
     print(base)
     DEFAULT_SHADER = love.graphics.newShader(base..'/render_shader.glsl')
-    
+
     local temp_canvas = love.graphics.newCanvas(16,16)
     love.graphics.setCanvas(temp_canvas)
     love.graphics.clear(0.5,0.5,0.5,1)
@@ -76,7 +76,7 @@ local function startupRender()
     love.graphics.setCanvas()
     DEFAULT_TEXTURE = love.graphics.newImage(temp_canvas:newImageData())
     temp_canvas = nil
-    
+
     DEFAULT_CUBE_MODEL =  quinta.newModel(quinta.pCubeDF(1,1,1))
     DEFAULT_PLANE_MODEL =  quinta.newModel(quinta.pPlaneDF(1,1))
 end
@@ -98,24 +98,24 @@ end
 -- Is used for the priority queue
 local function CHeap()
     local self = {}
-    
+
     local last = 0 --the id of the last inserted item
     local container = {}
-    
+
     function self.compare(a,b)
         return a <= b
     end
-    
+
     function self.clear()
         container = {}
         last = 0
     end
-    
+
     local function getParentOf(id)
         if math.fmod(id,2) == 0 then return id/2 end
-        return (id-1)/2 
+        return (id-1)/2
     end
-    
+
     function self.push(data)
         --is first element.
         if last <= 1 then
@@ -123,12 +123,12 @@ local function CHeap()
             last = 2
             return nil
         end
-        
+
         local heap_property = false
         local current = last
         local parent = 0
         container[current] = data
-        
+
         while not heap_property do
             parent = getParentOf(current)
             if self.compare( container[current], container[parent] ) then
@@ -141,18 +141,18 @@ local function CHeap()
             end
             if current <= 1 then
                 heap_property = true
-            end        
+            end
         end
         last = last+1
-        
+
     end
-    
+
     function self.pop()
         --sawp first and last value
         local top = container[1]
         container[1] = container[last-1]
         container[last-1] = nil
-        
+
         local current = 1
         local heap_property = false
         --print('*** START ***')
@@ -167,13 +167,13 @@ local function CHeap()
                 else
                     choosed = right
                 end
-                
+
                 if self.compare(container[choosed],container[current]) then
                     --swap the value
                     local temp = container[choosed]
                     container[choosed] = container[current]
                     container[current] = temp
-                    current = choosed   
+                    current = choosed
                 else
                     heap_property = true
                 end
@@ -185,7 +185,7 @@ local function CHeap()
                     local temp = container[choosed]
                     container[choosed] = container[current]
                     container[current] = temp
-                    current = choosed   
+                    current = choosed
                 else
                     heap_property = true
                 end
@@ -195,18 +195,18 @@ local function CHeap()
         end
 
         last = math.max(last-1,0)
-        
+
         return top
     end
-    
+
     function self.peek()
         return container[1]
     end
-    
+
     function self.getSize()
         return last
     end
-    
+
     return self
 end
 
@@ -215,23 +215,23 @@ local function loadObj(path)
     local obj = obj_reader.load(path)
 	local faces = {}
 	local verts = {}
-	
+
 	for _,v in ipairs(obj.v) do
 		table.insert(verts, {v.x,v.y,v.z})
 	end
-  
-  for _, vrtx in ipairs(obj.f) do
-      --add the first 3 vertices 
-      local j = 1
-      while j < 4 do
-          local x, y, z = verts[vrtx[j].v][1], verts[vrtx[j].v][2], verts[vrtx[j].v][3]
-          local u, v =  obj.vt[vrtx[j].vt].u,  obj.vt[vrtx[j].vt].v
-          local nx, ny, nz = obj.vn[vrtx[j].vn].x, obj.vn[vrtx[j].vn].y, obj.vn[vrtx[j].vn].z
-          -- {position, uv, rgb, normal}
-          table.insert(faces, {x,y,z, u,v, 1,1,1, nx,ny,nz})
-          j=j+1
-      end
-  end
+
+    for _, vrtx in ipairs(obj.f) do
+        --add the first 3 vertices 
+        local j = 1
+        while j < 4 do
+            local x, y, z = verts[vrtx[j].v][1], verts[vrtx[j].v][2], verts[vrtx[j].v][3]
+            local u, v =  obj.vt[vrtx[j].vt].u,  obj.vt[vrtx[j].vt].v
+            local nx, ny, nz = obj.vn[vrtx[j].vn].x, obj.vn[vrtx[j].vn].y, obj.vn[vrtx[j].vn].z
+            -- {position, uv, rgb, normal}
+            table.insert(faces, {x,y,z, u,v, 1,1,1, nx,ny,nz})
+            j=j+1
+        end
+    end
 	return faces, obj.mtl
 end
 
@@ -239,11 +239,11 @@ function quinta.ObjToColTriangles(path)
     local obj = obj_reader.load(path)
 	local triangles = {}
     local verts = {}
-	
+
 	for _,v in ipairs(obj.v) do
 		table.insert(verts, {v.x,v.y,v.z})
 	end
-  
+
     local vertex = {}
     for _, vrtx in ipairs(obj.f) do
         --add the first 3 vertices 
@@ -255,14 +255,14 @@ function quinta.ObjToColTriangles(path)
         --.colTriangleMStatic
         table.insert(triangles, quinta.colTriangle(vertex[1],vertex[2],vertex[3]) )
     end
-    
+
 	return triangles
 end
 
 local function validateTextureData(texture_data)
     if type(texture_data) == "string" then
         local texture = love.graphics.newImage(texture_data, { mipmaps = true })
-        texture:setFilter("nearest", "nearest") 
+        texture:setFilter("nearest", "nearest")
         texture:setWrap("repeat","repeat")
         return texture
     end
@@ -273,7 +273,7 @@ function quinta.Material3D(diffuse,normal,distortion, layer)
     local self = {}
     self.diffuse      = validateTextureData(diffuse) or DEFAULT_TEXTURE
     self.distortion   = validateTextureData(distortion) or DEFAULT_DISTORTION
-    self.normal       = validateTextureData(normal) 
+    self.normal       = validateTextureData(normal)
     self.render_layer = layer or 1
     self.wired = false
     --print('new material diffuse is:', self.diffuse)
@@ -287,7 +287,7 @@ function quinta.newMesh(vertex_data)
         {"VertexColor", "float", 3},
         {"VertexNormal", "float", 3}
     }
-    
+
     if #vertex_data > 0 then
         for i=1, #vertex_data do
             --uv coords ? 
@@ -300,7 +300,7 @@ function quinta.newMesh(vertex_data)
             if #vertex_data[i] < 6 then
                 vertex_data[i][6] = 1
                 vertex_data[i][7] = 1
-                vertex_data[i][8] = 1 
+                vertex_data[i][8] = 1
             end
 
             -- normals? 
@@ -314,7 +314,7 @@ function quinta.newMesh(vertex_data)
                 vertex_data[i][9] = normal_vector.x
                 vertex_data[i][10] = normal_vector.y
                 vertex_data[i][11] = normal_vector.z
-            end 
+            end
         end
         return love.graphics.newMesh(mesh_format, vertex_data, "triangles")
     end
@@ -324,7 +324,7 @@ end
 
 function quinta.newModel(vertex_data,material_data)
     local model = {}
-    
+
 
     model.mesh = nil
     model.meshes = {}
@@ -338,7 +338,7 @@ function quinta.newModel(vertex_data,material_data)
         table.insert(model.meshes,temp)
     else
         local i = 1
-        while material_data[i] do 
+        while material_data[i] do
             local temp = {}
             temp.first    = material_data[i+1] --the first vertex that uses that material....
             temp.count    = material_data[i+2] --the number of vertex that use that material
@@ -358,35 +358,35 @@ end
 --the basic description of location, rotation and scale of a object in 3d Space
 function quinta.Space3D()
     local self = {}
-    
+
     self.pos = CPMLF_NEW_VEC3(0,0,0)
     self.rot = CPMLF_NEW_VEC3(0,0,0)
     self.scale = CPMLF_NEW_VEC3(1,1,1)
-    
+
     function self.getPosAsVector()
         return self.pos
     end
-    
+
     function self.getPos()
         return self.pos.x, self.pos.y, self.pos.z
     end
-    
+
     function self.getRotAsVector()
         return self.rot
     end
-    
+
     function self.getRot()
         return self.rot.x, self.rot.y, self.rot.z
     end
-    
+
     function self.getScaleAsVector()
         return self.scale
     end
-    
+
     function self.getScale()
         return self.scale.x, self.scale.y, self.scale.z
     end
-    
+
     function self.setPos(x,y,z)
         if x then self.pos.x = x end
         if y then self.pos.y = y end
@@ -400,14 +400,14 @@ function quinta.Space3D()
         if z then self.rot.z = z end
         self.calculateTransform()
     end
-    
+
     function  self.setScale(x,y,z)
         if x then self.scale.x = x end
         if y then self.scale.y = y end
         if z then self.scale.z = z end
         self.calculateTransform()
     end
-    
+
     return self
 end
 
@@ -415,11 +415,11 @@ function quinta.pTriangleFromVectors(vA,vB,vC)
     --a cube is composed of 12 triangles
     --and 8 vertex, and later append their uv coords
     local face_list = {}
-    
+
     local A = {vA.x, vA.y, vA.z}
     local B = {vB.x, vB.y, vB.z}
     local C = {vC.x, vC.y, vC.z}
-    
+
     face_list[#face_list+1] = table_append(A,0,0)
     face_list[#face_list+1] = table_append(B,1,0)
     face_list[#face_list+1] = table_append(C,1,1)
@@ -428,19 +428,19 @@ end
 
 function quinta.pPlaneFromVectors(vA,vB,vC,vD)
     local face_list = {}
-    
+
     local A = {vA.x, vA.y, vA.z}
     local B = {vB.x, vB.y, vB.z}
     local C = {vC.x, vC.y, vC.z}
     local D = {vD.x, vD.y, vD.z}
-    
+
     face_list[#face_list+1] = table_append(A,0,0)
     face_list[#face_list+1] = table_append(B,1,0)
     face_list[#face_list+1] = table_append(C,1,1)
     face_list[#face_list+1] = table_append(C,1,1)
     face_list[#face_list+1] = table_append(D,0,1)
     face_list[#face_list+1] = table_append(A,0,0)
-    
+
     return face_list
 end
 
@@ -454,14 +454,14 @@ function quinta.pPlane(sw,sh)
     local C = {x1, y0, z1}
     local F = {x0, y1, z1}
     local G = {x1, y1, z1}
-    
+
     face_list[#face_list+1] = table_append(C,0,0)
     face_list[#face_list+1] = table_append(B,1,0)
     face_list[#face_list+1] = table_append(F,1,1)
     face_list[#face_list+1] = table_append(F,1,1)
     face_list[#face_list+1] = table_append(G,0,1)
     face_list[#face_list+1] = table_append(C,0,0)
-    
+
     return face_list
 end
 
@@ -470,7 +470,7 @@ function quinta.pCubeMinMax(x0,y0,z0,x1,y1,z1)
     --a cube is composed of 12 triangles
     --and 8 vertex, and later append their uv coords
     local face_list = {}
-    
+
     local A = {x0, y0, z0}
     local B = {x0, y0, z1}
     local C = {x1, y0, z1}
@@ -479,49 +479,49 @@ function quinta.pCubeMinMax(x0,y0,z0,x1,y1,z1)
     local F = {x0, y1, z1}
     local G = {x1, y1, z1}
     local H = {x1, y1, z0}
-    
+
     face_list[#face_list+1] = table_append(A,1,1)
     face_list[#face_list+1] = table_append(B,1,0)
     face_list[#face_list+1] = table_append(C,0,0)
     face_list[#face_list+1] = table_append(C,0,0)
     face_list[#face_list+1] = table_append(D,0,1)
     face_list[#face_list+1] = table_append(A,1,1)
-    
+
     face_list[#face_list+1] = table_append(A,0,1)
     face_list[#face_list+1] = table_append(E,1,1)
     face_list[#face_list+1] = table_append(F,1,0)
     face_list[#face_list+1] = table_append(F,1,0)
     face_list[#face_list+1] = table_append(B,0,0)
     face_list[#face_list+1] = table_append(A,0,1)
-    
+
     face_list[#face_list+1] = table_append(D,1,1)
     face_list[#face_list+1] = table_append(C,1,0)
     face_list[#face_list+1] = table_append(G,0,0)
     face_list[#face_list+1] = table_append(G,0,0)
     face_list[#face_list+1] = table_append(H,0,1)
     face_list[#face_list+1] = table_append(D,1,1)
-    
+
     face_list[#face_list+1] = table_append(E,0,1)
     face_list[#face_list+1] = table_append(H,1,1)
     face_list[#face_list+1] = table_append(G,1,0)
     face_list[#face_list+1] = table_append(G,1,0)
     face_list[#face_list+1] = table_append(F,0,0)
     face_list[#face_list+1] = table_append(E,0,1)
-    
+
     face_list[#face_list+1] = table_append(H,0,0)
     face_list[#face_list+1] = table_append(E,1,0)
     face_list[#face_list+1] = table_append(A,1,1)
     face_list[#face_list+1] = table_append(A,1,1)
     face_list[#face_list+1] = table_append(D,0,1)
     face_list[#face_list+1] = table_append(H,0,0)
-    
+
     face_list[#face_list+1] = table_append(C,0,0)
     face_list[#face_list+1] = table_append(B,1,0)
     face_list[#face_list+1] = table_append(F,1,1)
     face_list[#face_list+1] = table_append(F,1,1)
     face_list[#face_list+1] = table_append(G,0,1)
     face_list[#face_list+1] = table_append(C,0,0)
-    
+
     return face_list
 end
 
@@ -543,7 +543,7 @@ local function createDoubleFaced(face_list)
         face_list[#face_list+1] = face_list[i+1]
         i=i+3
     end
-    
+
     return face_list
 end
 
@@ -551,7 +551,7 @@ function quinta.pPlaneDF(sw,sh)
     --a cube is composed of 12 triangles
     --and 8 vertex, and later append their uv coords
     local face_list = createDoubleFaced(quinta.pPlane(sw,sh))
-    
+
     return face_list
 end
 
@@ -561,8 +561,8 @@ function quinta.pCubeDF(sw,sh,sd)
     --a cube is composed of 12 triangles
     --and 8 vertex, and later append their uv coords
     local face_list = createDoubleFaced(quinta.pCube(sw,sh,sd))
-    
-    
+
+
     return face_list
 end
 
@@ -571,7 +571,7 @@ function quinta.colAABB(sw,sh,sd)
     self.pos = CPMLF_NEW_VEC3(0,0,0)
     self.scale = CPMLF_NEW_VEC3(sw,sh,sd) --the size of the bounding box is equal to the scale
     self.offset = CPMLF_NEW_VEC3(0,0,0)
-    self.transform = nil 
+    self.transform = nil
     self.color = {1,0,0,1}
     self.orig_min = CPMLF_NEW_VEC3(-sw/2, -sh/2, -sd/2)
     self.orig_max = CPMLF_NEW_VEC3(sw/2, sh/2, sd/2)
@@ -580,57 +580,57 @@ function quinta.colAABB(sw,sh,sd)
     self.is_on_chunks = {}
     self.cube_mesh = nil
     self.second_color = {0,1,1,1}
-    
+
     function self.setSecondColor(r,g,b,a)
         self.second_color[1] = r or 1
         self.second_color[2] = g or 1
         self.second_color[3] = b or 1
         self.second_color[4] = a or 0.5
     end
-    
+
     function self.buildNewCubeMesh()
         self.cube_mesh = quinta.newMesh(
           quinta.pCubeMinMax(self.min.x*(-1),self.min.y,self.min.z,
             self.max.x*(-1),self.max.y,self.max.z)
             )
     end
-    
+
     function self.setColor(r,g,b,a)
         self.color[1] = r or 1
         self.color[2] = g or 1
         self.color[3] = b or 1
         self.color[4] = a or 0.5
     end
-    
+
     function self.calculateTransform()
         --move the model...
         local new_transform = nil
         new_transform = CPMLF_IDENTITY_MATRIX()
-        
+
         new_transform:scale(new_transform, self.scale)
         new_transform:translate(new_transform, CPMLF_NEW_VEC3(self.pos.x,self.pos.y,self.pos.z))
-        
+
         self.transform = TransposeMatrix(new_transform)
-        
+
         self.min = (new_transform*self.orig_min)
         self.max = (new_transform*self.orig_max)
     end
-    
+
     self.calculateTransform()
-    
+
     function self.intersectAABB(other)
         return cpml.intersect.aabb_aabb(self,other)
     end
-    
+
     --this is similar to the renderMe method on the instance 3D, but more simple
     function self.renderMe(shader, renderWidth,renderHeight)
         local mesh = DEFAULT_CUBE_MODEL.meshes[1]
-    
+
         love.graphics.setColor(self.color[1],self.color[2],self.color[3],self.color[4])
         love.graphics.setMeshCullMode('back') --back
         love.graphics.setWireframe(true) --self.wireframe
-        
-        if not self.cube_mesh then 
+
+        if not self.cube_mesh then
             shader:send("Model_Matrix", self.transform)
             --render only the vertex of the material...
             DEFAULT_CUBE_MODEL.mesh:setDrawRange(mesh.first, mesh.last)
@@ -641,10 +641,10 @@ function quinta.colAABB(sw,sh,sd)
             love.graphics.draw(self.cube_mesh, -renderWidth/2, -renderHeight/2)
         end
         love.graphics.setMeshCullMode("none")
-        
+
         love.graphics.setWireframe(false)
     end
-    
+
     return self
 end
 
@@ -653,35 +653,35 @@ end
 function quinta.colTriangleMStatic(new_a,new_b,new_c)
     local self = {}
     self.triangle = {new_b,new_a,new_c}
-    
+
     local min_x = MIN(MIN(new_a.x,new_b.x),new_c.x)
     local min_y = MIN(MIN(new_a.y,new_b.y),new_c.y)
     local min_z = MIN(MIN(new_a.z,new_b.z),new_c.z)
-    
+
     local max_x = MAX(MAX(new_a.x,new_b.x),new_c.x)
     local max_y = MAX(MAX(new_a.y,new_b.y),new_c.y)
     local max_z = MAX(MAX(new_a.z,new_b.z),new_c.z)
-    
+
     self.min = CPMLF_NEW_VEC3(min_x,min_y,min_z)
     self.max = CPMLF_NEW_VEC3(max_x,max_y,max_z)
-    
+
     function self.intersectAABB(other)
         return cpml.intersect.aabb_aabb(self,other)
     end
-    
+
     return self
 end
 
 function quinta.colTriangle(vertex_a,vertex_b, vertex_c)
     local self = quinta.colAABB(1,1,1)
-    self.transform = nil 
+    self.transform = nil
     self.color = {1,0,1,1}
-    
-    
+
+
     --a cube is composed of 12 triangles
     --and 8 vertex, and later append their uv coords
     self.triangle = {vertex_a,vertex_b,vertex_c}
-    
+
     function self.buildNewTriangleMesh()
         local a = self.triangle[1]
         local b = self.triangle[2]
@@ -696,101 +696,101 @@ function quinta.colTriangle(vertex_a,vertex_b, vertex_c)
         b.x = b.x*(-1)
         c.x = c.x*(-1)
     end
-    
-    
+
+
     function self.calculateTransform()
         --move the model...
         local new_transform = nil
         new_transform = CPMLF_IDENTITY_MATRIX()
-        
+
         new_transform:scale(new_transform, self.scale)
-        
+
         new_transform:rotate(new_transform, self.rot.z , CPMLC_UNIT_V3_Z)
         new_transform:rotate(new_transform, -self.rot.y , CPMLC_UNIT_V3_Y)
         new_transform:rotate(new_transform, self.rot.x , CPMLC_UNIT_V3_X)
-        
+
         new_transform:translate(new_transform, CPMLF_NEW_VEC3(self.pos.x,self.pos.y,self.pos.z))
-        
+
         self.transform = TransposeMatrix(new_transform)
         local new_a = (new_transform*vertex_a)
         local new_b = (new_transform*vertex_b)
         local new_c = (new_transform*vertex_c)
         self.triangle = {new_b,new_a,new_c}
-        
+
         --calculate a new bounding box for the plane
         local min_x = MIN(MIN(new_a.x,new_b.x),new_c.x)
         local min_y = MIN(MIN(new_a.y,new_b.y),new_c.y)
         local min_z = MIN(MIN(new_a.z,new_b.z),new_c.z)
-        
+
         local max_x = MAX(MAX(new_a.x,new_b.x),new_c.x)
         local max_y = MAX(MAX(new_a.y,new_b.y),new_c.y)
         local max_z = MAX(MAX(new_a.z,new_b.z),new_c.z)
-        
+
         self.min = CPMLF_NEW_VEC3(min_x,min_y,min_z)
         self.max = CPMLF_NEW_VEC3(max_x,max_y,max_z)
-        
+
         --flip the x value for the render...
-        
+
     end
-    
+
     self.calculateTransform()
     --self.buildNewTriangleMesh()
-    
+
     --this is similar to the renderMe method on the instance 3D, but more simple
-    local old_renderMe = self.renderMe 
+    local old_renderMe = self.renderMe
     self.renderMe = function(shader, renderWidth,renderHeight)
-        
+
         self.buildNewTriangleMesh() --create a new mesh for the triangle
-        self.buildNewCubeMesh() 
-        
+        self.buildNewCubeMesh()
+
         old_renderMe(shader, renderWidth,renderHeight)
         local mesh = DEFAULT_PLANE_MODEL.meshes[1]
         --this is horrible... 
         love.graphics.setMeshCullMode('back') --back
         shader:send("Model_Matrix", CPMLF_IDENTITY_MATRIX())
         self.triangle_mesh:setDrawRange(mesh.first, mesh.last)
-        
+
         love.graphics.setWireframe(true) --self.wireframe
         love.graphics.setColor(self.second_color[1],self.second_color[2],self.second_color[3],self.second_color[4])
         love.graphics.draw(self.triangle_mesh, -renderWidth/2, -renderHeight/2)
-        
+
         love.graphics.setMeshCullMode("none")
-        
+
         love.graphics.setWireframe(false)
     end
-    
+
     return self
 end
 
 --we use the reiange colision
 function quinta.colPlane(sw,sh)
     local self = quinta.colAABB(sw,sh,1)
-    self.transform = nil 
+    self.transform = nil
     self.color = {0,1,0,0.25}
-    
+
     --a cube is composed of 12 triangles
     --and 8 vertex, and later append their uv coords
     self.triangles = {}
     self.plane_mesh = nil
-    
+
     local x0,y0 = -0.5, -0.5
     local x1,y1,z1 = 0.5, 0.5, 0
-    
+
     local vertex_a = CPMLF_NEW_VEC3(x1, y0, z1)
     local vertex_b = CPMLF_NEW_VEC3(x0, y0, z1)
     local vertex_c = CPMLF_NEW_VEC3(x0, y1, z1)
     local vertex_d = CPMLF_NEW_VEC3(x1, y1, z1)
     self.triangles[1] = {vertex_b,vertex_a,vertex_c}
     self.triangles[2] = {vertex_d,vertex_c,vertex_a}
-    
-    
-    
+
+
+
     function self.buildNewPlaneMesh()
         local a = self.triangles[1][3]
         local b = self.triangles[1][2]
         local c = self.triangles[1][1]
         local d = self.triangles[2][2]
-        
+
         a.x = a.x*(-1)
         b.x = b.x*(-1)
         c.x = c.x*(-1)
@@ -803,20 +803,20 @@ function quinta.colPlane(sw,sh)
         c.x = c.x*(-1)
         d.x = d.x*(-1)
     end
-    
+
     function self.calculateTransform()
         --move the model...
         local new_transform = nil
         new_transform = CPMLF_IDENTITY_MATRIX()
-        
+
         new_transform:scale(new_transform, self.scale)
-        
+
         new_transform:rotate(new_transform, self.rot.z , CPMLC_UNIT_V3_Z)
         new_transform:rotate(new_transform, -self.rot.y , CPMLC_UNIT_V3_Y)
         new_transform:rotate(new_transform, self.rot.x , CPMLC_UNIT_V3_X)
-        
+
         new_transform:translate(new_transform, CPMLF_NEW_VEC3(self.pos.x,self.pos.y,self.pos.z))
-        
+
         self.transform = TransposeMatrix(new_transform)
         local new_a = (new_transform*vertex_a)
         local new_b = (new_transform*vertex_b)
@@ -824,50 +824,50 @@ function quinta.colPlane(sw,sh)
         local new_d = (new_transform*vertex_d)
         self.triangles[1] = {new_c,new_b,new_a}
         self.triangles[2] = {new_a,new_d,new_c}
-        
+
         --calculate a new bounding box for the plane
         local min_x = MIN(MIN(MIN(new_a.x,new_b.x),new_c.x),new_d.x)
         local min_y = MIN(MIN(MIN(new_a.y,new_b.y),new_c.y),new_d.y)
         local min_z = MIN(MIN(MIN(new_a.z,new_b.z),new_c.z),new_d.z)
-        
+
         local max_x = MAX(MAX(MAX(new_a.x,new_b.x),new_c.x),new_d.x)
         local max_y = MAX(MAX(MAX(new_a.y,new_b.y),new_c.y),new_d.y)
         local max_z = MAX(MAX(MAX(new_a.z,new_b.z),new_c.z),new_d.z)
-        
+
         self.min = CPMLF_NEW_VEC3(min_x,min_y,min_z)
         self.max = CPMLF_NEW_VEC3(max_x,max_y,max_z)
          --create a new box for the cube
     end
-    
+
     self.calculateTransform()
     --this is similar to the renderMe method on the instance 3D, but more simple
-    local old_renderMe = self.renderMe 
+    local old_renderMe = self.renderMe
     self.renderMe = function(shader, renderWidth,renderHeight)
         self.buildNewPlaneMesh()
         self.buildNewCubeMesh()
-        
+
         old_renderMe(shader, renderWidth,renderHeight)
         local mesh = DEFAULT_PLANE_MODEL.meshes[1]
         --this is horrible... 
         love.graphics.setMeshCullMode('back') --back
         shader:send("Model_Matrix", CPMLF_IDENTITY_MATRIX())
         self.plane_mesh:setDrawRange(mesh.first, mesh.last)
-        
+
         love.graphics.setWireframe(true) --self.wireframe
         love.graphics.setColor(self.second_color[1],self.second_color[2],self.second_color[3],self.second_color[4])
         love.graphics.draw(self.plane_mesh, -renderWidth/2, -renderHeight/2)
-        
+
         love.graphics.setMeshCullMode("none")
-        
+
         love.graphics.setWireframe(false)
     end
-    
+
     return self
 end
 
 function quinta.Camera(camera_type, renderWidth, renderHeight)
     local self = quinta.Space3D()
-    local fov = 60
+    self.fov = 35
     local nearClip = 0.0001
     local farClip = 1000
     local width, height = love.window.getMode( )
@@ -878,31 +878,41 @@ function quinta.Camera(camera_type, renderWidth, renderHeight)
     self.scale = CPMLF_NEW_VEC3(1,1,1)
     self.camera_view = cpml.mat4()
     self.camera_inverse = InvertMatrix(self.camera_view)
-            
+
     if not camera_type or camera_type == 'perspective' then
         self.type = 'perspective'
         self.matrix = TransposeMatrix(
-            cpml.mat4.from_perspective(fov, (self.renderWidth/self.renderHeight), nearClip, farClip)
+            cpml.mat4.from_perspective(self.fov, (self.renderWidth/self.renderHeight), nearClip, farClip)
             )
     else
         self.type = 'ortho'
         local ratio =  (self.renderWidth/self.renderHeight)
         self.matrix = TransposeMatrix(cpml.mat4.from_ortho(-10,10,5*ratio,-5*ratio,0.0001,10))
     end
-    
+
+    function self.updateFOV(new_fov)
+        if self.type ~= 'perspective' then
+            return
+        end
+        self.fov = new_fov
+        self.matrix = TransposeMatrix(
+            cpml.mat4.from_perspective(self.fov, (self.renderWidth/self.renderHeight), nearClip, farClip)
+            )
+    end
+
     --we override the calculte transform of space3D
     function self.calculateTransform()
         --move the model...
         local new_transform = nil
         new_transform = CPMLF_IDENTITY_MATRIX()
-        
+
         -- apply rotations
         new_transform:scale(new_transform, self.scale)
 
         new_transform:rotate(new_transform, self.rot.z , CPMLC_UNIT_V3_Z)
         new_transform:rotate(new_transform, self.rot.y , CPMLC_UNIT_V3_Y)
         new_transform:rotate(new_transform, self.rot.x , CPMLC_UNIT_V3_X)
-        
+
         new_transform:translate(new_transform, CPMLF_NEW_VEC3(self.pos.x,self.pos.y,self.pos.z))
 
         self.camera_dir_transform = TransposeMatrix(new_transform)
@@ -916,7 +926,7 @@ function quinta.Camera(camera_type, renderWidth, renderHeight)
         --]]
         self.direction = (new_transform*(CPMLF_NEW_VEC3(0,0,-1)))
     end
-    
+
     self.calculateTransform()
 
 
@@ -925,7 +935,7 @@ function quinta.Camera(camera_type, renderWidth, renderHeight)
         local v2d_trg = CPMLF_NEW_VEC2(target.pos.x,target.pos.y)
         local angle = CPMLF_VEC2_ANGLE2(v2d_1,v2d_trg )
         local angle2 = math.atan2( CPMLF_VEC2_DIST(v2d_1,v2d_trg), self.pos.z-target.pos.z )
-        
+
         self.rot.z = angle-math.rad(90)
         self.rot.x = angle2
     end
@@ -933,13 +943,13 @@ function quinta.Camera(camera_type, renderWidth, renderHeight)
     function self.calculateViewMatrix()
         self.camera_view = cpml.mat4()
         self.camera_view:translate(self.camera_view, CPMLF_NEW_VEC3(self.pos.x,-self.pos.y,-self.pos.z))
-    
+
         self.camera_view:rotate(self.camera_view, self.rot.z, CPMLC_UNIT_V3_Z)
         self.camera_view:rotate(self.camera_view, self.rot.y, CPMLC_UNIT_V3_Y)
         self.camera_view:rotate(self.camera_view, self.rot.x, CPMLC_UNIT_V3_X)
         self.camera_view = TransposeMatrix(self.camera_view)
-    end            
-    
+    end
+
 
 
     return self
@@ -949,14 +959,14 @@ function quinta.Instance3D()
     local self = quinta.Space3D()
     self.model = nil
     self.culling = 'back'
-    
-    self.materials = nil 
+
+    self.materials = nil
     self.transform = nil
     self.model_rot_transform = nil
     self.wireframe = false
     self.color = {1,1,1,1}
     self.animation = nil
-    
+
     --this sets the color of tint, it does not change the vertex color
     function self.setColor(r,g,b,a)
         self.color[1] = r or 1
@@ -964,7 +974,7 @@ function quinta.Instance3D()
         self.color[3] = b or 1
         self.color[4] = a or 1
     end
-    
+
     function  self.setWireframe(val)
         self.wireframe = val or false
     end
@@ -974,14 +984,14 @@ function quinta.Instance3D()
         --move the model...
         local new_transform = nil
         new_transform = CPMLF_IDENTITY_MATRIX()
-        
+
         -- apply rotations
         new_transform:scale(new_transform, self.scale)
 
         new_transform:rotate(new_transform, self.rot.z , CPMLC_UNIT_V3_Z)
         new_transform:rotate(new_transform, self.rot.y , CPMLC_UNIT_V3_Y)
         new_transform:rotate(new_transform, self.rot.x , CPMLC_UNIT_V3_X)
-        
+
         new_transform:translate(new_transform, CPMLF_NEW_VEC3(-self.pos.x,self.pos.y,self.pos.z))
 
         self.transform = TransposeMatrix(new_transform)
@@ -998,7 +1008,7 @@ function quinta.Instance3D()
     end
 
     self.calculateTransform()
-    
+
 
     function self.renderMe(shader, renderWidth,renderHeight, layer)
         for _, mesh in ipairs(self.layer_meshes[layer]) do
@@ -1017,9 +1027,9 @@ function quinta.Instance3D()
             self.model.mesh:setDrawRange(mesh.first, mesh.last)
             love.graphics.setColor(self.color[1],self.color[2],self.color[3],self.color[4])
             love.graphics.draw(self.model.mesh, -renderWidth/2, -renderHeight/2)
-            
+
             love.graphics.setMeshCullMode("none")
-        
+
         end
         love.graphics.setWireframe(false)
     end
@@ -1041,7 +1051,7 @@ function quinta.Instance3D()
             return mesh_list
         end
         for _,mesh in pairs(self.model.meshes) do
-            if mesh.material == material_name then       
+            if mesh.material == material_name then
                 table.insert(mesh_list, mesh)
             end
         end
@@ -1053,7 +1063,7 @@ function quinta.Instance3D()
         local v2d_trg = CPMLF_NEW_VEC2(target.pos.x,target.pos.y)
         local angle2 = math.atan2( CPMLF_VEC2_DIST(v2d_1,v2d_trg), target.pos.z-self.pos.z )
         local new_transform = CPMLF_IDENTITY_MATRIX()
-        
+
         --I hate the Gimbal lock problem...
         new_transform:rotate(new_transform, self.rot.y , CPMLC_UNIT_V3_Y)
         new_transform:rotate(new_transform, self.rot.x + angle2, CPMLC_UNIT_V3_X)
@@ -1070,7 +1080,7 @@ function quinta.Instance3D()
     end
 
     function self.faceTo(target,nangle)
-        local nangle = nangle or 0 
+        local nangle = nangle or 0
         local angle = CPMLF_VEC2_ANGLE2(CPMLF_NEW_VEC2(self.pos.x,-self.pos.y),CPMLF_NEW_VEC2(target.pos.x,-target.pos.y))
         self.setRot(nil,nil,nangle-angle)
     end
@@ -1081,15 +1091,15 @@ function quinta.Instance3D()
         local angle = CPMLF_VEC2_ANGLE2(v2d_1,v2d_trg )
         local angle2 = math.atan2( CPMLF_VEC2_DIST(v2d_1,v2d_trg), self.pos.z-target.pos.z )
         local new_transform = CPMLF_IDENTITY_MATRIX()
-        
+
         --if x then self.rot.x = x end
         --if y then self.rot.y = y end
         --if z then self.rot.z = z end
-        
+
         --self.rot.z = angle--math.rad(90)
         --self.rot.x = angle2---math.rad(90)
-        
-        
+
+
         --I hate the Gimbal lock problem...
         new_transform:rotate(new_transform, self.rot.y , CPMLC_UNIT_V3_Y)
         new_transform:rotate(new_transform, self.rot.x-angle2 , CPMLC_UNIT_V3_X)
@@ -1134,12 +1144,12 @@ function quinta.Object3D(data,texture_data)
     self.layer_meshes[1] = {}
     self.layer_meshes[2] = {}
     self.layer_meshes[3] = {}
-    
+
     local texture = nil
     --local material = nil 
     if type(texture_data) == "string" then
         texture = love.graphics.newImage(texture_data, { mipmaps = true })
-        texture:setFilter("nearest", "nearest") 
+        texture:setFilter("nearest", "nearest")
         texture:setWrap("repeat","repeat")
     end
 
@@ -1153,7 +1163,7 @@ function quinta.Object3D(data,texture_data)
                 table.insert(self.layer_meshes[layer], mesh)
             end
         else --is a list of materials
-            
+
             local i = 1
             local n_texture = nil
             for _,mesh in pairs(self.model.meshes) do
@@ -1165,7 +1175,7 @@ function quinta.Object3D(data,texture_data)
                             n_texture:setWrap("repeat","repeat")
                         end
                         print('>>',mesh.material,texture_data[i])
-                        
+
                         self.materials[mesh.material] = quinta.Material3D(n_texture)
                     elseif type(texture_data[i]) == "table" then --asume is a material
                         self.materials[mesh.material] = texture_data[i]
@@ -1177,19 +1187,18 @@ function quinta.Object3D(data,texture_data)
                 local layer = self.materials[mesh.material].render_layer
                 print(">>> added to layer "..tostring(layer))
                 table.insert(self.layer_meshes[layer], mesh)
-                
+
                 if i <= #texture_data then
-                    i=i+1  
+                    i=i+1
                 end
             end
         end
     else
         -- [[
-        --print('else')
         for _,mesh in pairs(self.model.meshes) do
             --print(mesh.material,texture_data, k)
-            if not self.materials[mesh.material] then 
-                self.materials[mesh.material] = quinta.Material3D(texture)
+            if not self.materials[mesh.material] then
+                self.materials[mesh.material] = quinta.Material3D(texture_data)
             end
             local layer = self.materials[mesh.material].render_layer
             table.insert(self.layer_meshes[layer], mesh)
@@ -1210,6 +1219,82 @@ function quinta.Object3D(data,texture_data)
 end
 
 
+function quinta.spriteAnimation(list_frames, frame_duration, loop)
+    local self = {}
+    local current_index_frame = 1
+    local clock = 0
+    self.frames = list_frames or {}
+    self.frame_duration = frame_duration
+    self.is_looped = not( not(loop) )
+
+    function self.getCurrentFrame(dt)
+        clock = clock + dt
+        if clock > self.frame_duration then
+            if self.frames[current_index_frame + 1] then
+                current_index_frame = current_index_frame + 1
+            elseif self.is_looped then
+                current_index_frame = 1
+            end
+            clock = 0
+        end
+        return self.frames[current_index_frame] or 1
+    end
+
+    return self
+end
+
+function quinta.Sprite3D(texture_image, cols, rows)
+    -- a special plane that is oriented to the top
+    local plane = {
+        {  1, 0, 0, 1, 1, 1, 1, 1, -0, 1, -0 },
+        { -1, 0, 1, 0, 0, 1, 1, 1, -0, 1, -0 },
+        { -1, 0, 0, 0, 1, 1, 1, 1, -0, 1, -0 },
+        {  1, 0, 0, 1, 1, 1, 1, 1, -0, 1, -0 },
+        {  1, 0, 1, 1, 0, 1, 1, 1, -0, 1, -0 },
+        { -1, 0, 1, 0, 0, 1, 1, 1, -0, 1, -0 }
+    }
+    local self = quinta.Object3D(plane, texture_image)
+    self.cols = cols or 1
+    self.rows = rows or 1
+
+    function self.setFrame(frame)
+        local size_w = 1/self.cols
+        local size_h = 1/self.rows
+        local on_col = math.fmod(frame-1, self.cols)
+        local on_row = math.floor((frame-1)/self.cols)
+    
+        local sprite_start_x = size_w * on_col
+        local sprite_start_y = size_h * on_row
+        local sprite_end_x=sprite_start_x+size_w
+        local sprite_end_y=sprite_start_y+size_h
+    
+        self.setVertexAttribute(1,2, {sprite_end_x, sprite_end_y})
+        self.setVertexAttribute(2,2, {sprite_start_x, sprite_start_y})
+        self.setVertexAttribute(3,2, {sprite_start_x, sprite_end_y})
+    
+        self.setVertexAttribute(4,2, {sprite_end_x, sprite_end_y})
+        self.setVertexAttribute(5,2, {sprite_end_x, sprite_start_y})
+        self.setVertexAttribute(6,2, {sprite_start_x, sprite_start_y})
+    end
+
+    function self.useAnimation(animation)
+        self.animation = animation
+        print('use animation', animation)
+    end
+
+    function self.updateAnimation(dt)
+        local animation = self.animation
+        if not animation then
+            return
+        end
+        self.setFrame(animation.getCurrentFrame(dt))
+    end
+
+    self.setFrame(1)
+    return self
+end
+
+
 --The only job of this class is render the objects, nothing more
 --use it to render a single object, or add objects to be render on a single pass
 --needs a camera to render
@@ -1218,10 +1303,10 @@ function quinta.Renderer(resolution_x,resolution_y)
     --local camTransform = cpml.mat4()
     local obj_pos2d = CPMLF_NEW_VEC2.new(0,0)
     local cam_dir2d = CPMLF_NEW_VEC2(0,0)
-    
+
     local love_width, love_height = love.graphics.getDimensions( )
-    local renderWidth  = resolution_x or love_width 
-    local renderHeight = resolution_y or love_height  
+    local renderWidth  = resolution_x or love_width
+    local renderHeight = resolution_y or love_height
 
     self.camera = quinta.Camera('perspective',renderWidth,renderHeight)
     self.shader = nil
@@ -1248,9 +1333,9 @@ function quinta.Renderer(resolution_x,resolution_y)
         local distance_b = CPMLF_VEC3_DIST2(self.camera.pos, b.pos)
         return distance_a >= distance_b
     end
-    
+
     function self.startUp()
-        
+
     end
 
     --function self.addLight(light)
@@ -1279,9 +1364,9 @@ function quinta.Renderer(resolution_x,resolution_y)
             i=i+1
         end
     end
-    
-    
-    
+
+
+
     --clear all the objects of the current render list
     function self.clearObjects()
         object_list = {}
@@ -1302,7 +1387,7 @@ function quinta.Renderer(resolution_x,resolution_y)
     function self.rotateCamera(dx,dy,dz)
         self.camera.rot.x = self.camera.rot.x + (dx or 0)
         self.camera.rot.y = self.camera.rot.y + (dy or 0)
-        self.camera.rot.z = self.camera.rot.z + (dz or 0) 
+        self.camera.rot.z = self.camera.rot.z + (dz or 0)
     end
 
     function self.setCameraLookAt(target)
@@ -1324,9 +1409,9 @@ function quinta.Renderer(resolution_x,resolution_y)
     end
 
     function self.render()
-        
+
         love.graphics.setCanvas({self.canvas, depth=true})
-        
+
             love.graphics.clear(self.bgcolor[1],self.bgcolor[2],self.bgcolor[3],self.bgcolor[4])
 
             love.graphics.setColor(1,1,1)
@@ -1342,9 +1427,9 @@ function quinta.Renderer(resolution_x,resolution_y)
             self.shader:send("MVP", MVP)
             --self.shader:send("camPos", {self.camera.pos.x,self.camera.pos.y,self.camera.pos.z})
             --self.shader:send("lightPos",self.light.pos,{0,0,0})
-            
+
             self.heap.clear()
-            
+
             cam_dir2d.x = math.sin(self.camera.rot.z)
             cam_dir2d.y = -math.cos(self.camera.rot.z)
             local i = 1
@@ -1363,22 +1448,22 @@ function quinta.Renderer(resolution_x,resolution_y)
                 --end
                 i=i+1
             end
-            
+
             local num_obj_to_render = self.heap.getSize()
             if num_obj_to_render > 0 then
                 self.render_percent = (num_obj_to_render/i)*100
             else
                 self.render_percent = 0
             end
-            
+
             local object_to_render = self.heap.pop()
             while object_to_render do
                 --layer one for solid 
                 object_to_render.renderMe(self.shader, self.camera.renderWidth, self.camera.renderHeight, 1)
                 --layer two for translucid
                 object_to_render.renderMe(self.shader, self.camera.renderWidth, self.camera.renderHeight, 2)
-                
-                object_to_render = self.heap.pop() 
+
+                object_to_render = self.heap.pop()
             end
 
             love.graphics.setShader()
@@ -1386,7 +1471,7 @@ function quinta.Renderer(resolution_x,resolution_y)
         love.graphics.setCanvas()
 
         love.graphics.setColor(1,1,1)
-        
+
         --this is the cheap way to have a resisable window, just scale the canvas to the window size
         --this not respect aspec ratio...
         love_width, love_height = love.graphics.getDimensions( )
@@ -1398,11 +1483,11 @@ function quinta.Renderer(resolution_x,resolution_y)
         love_height = love_height/2
         love.graphics.draw(self.canvas,
                 love_width-canvas_size_x, love_height-canvas_size_y, 0, factor_x, factor_y)
-        
+
         self.offset_d = self.offset_d +love.timer.getDelta( )
-        if self.offset_d > 5 then self.offset_d = 0 end 
+        if self.offset_d > 5 then self.offset_d = 0 end
     end
-    
+
     return self
 end
 
